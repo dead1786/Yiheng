@@ -89,7 +89,6 @@ const ExportModal = ({ isOpen, onClose, onConfirm, adminName }: any) => {
   );
 };
 
-// [修改] 新增 shift 類型
 type DataType = 'staff' | 'line' | 'location' | 'record' | 'log' | 'shift';
 interface DataSection { headers: string[]; list: any[]; }
 interface AllData { staff: DataSection; line: DataSection; location: DataSection; record: DataSection; log: DataSection; shift: DataSection; }
@@ -114,7 +113,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
   // Location Form
   const [newLoc, setNewLoc] = useState({ name: '', lat: '', lng: '', radius: '500' });
 
-  // [新增] Shift Form
+  // Shift Form
   const [newShift, setNewShift] = useState({ name: '', start: '09:00', end: '18:00' });
 
   useEffect(() => {
@@ -245,14 +244,13 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
   };
 
   const openEditStaff = (row: any[]) => {
-    // row 結構: [name, pwd, lineId, needReset, allowRemote, isLocked, isBound, shift]
     setStaffForm({ 
         name: row[0], 
         password: row[1], 
         lineId: row[2], 
         needReset: row[3], 
         allowRemote: row[4],
-        shift: row[7] || "" // L欄對應 Index 7 (在 adminGetData 的 list 映射中)
+        shift: row[7] || "" 
     });
     setEditingStaff(row);
     setIsAddingStaff(false);
@@ -269,7 +267,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
   const tabs = [
     { id: 'record', label: '打卡紀錄', icon: <ClipboardList size={18} /> },
     { id: 'staff', label: '員工管理', icon: <Users size={18} /> },
-    { id: 'shift', label: '班別設定', icon: <Clock size={18} /> }, // [新增]
+    { id: 'shift', label: '班別設定', icon: <Clock size={18} /> },
     { id: 'line', label: 'LINE ID', icon: <MessageSquare size={18} /> },
     { id: 'location', label: '地點設置', icon: <MapPin size={18} /> },
     { id: 'log', label: '操作紀錄', icon: <FileText size={18} /> },
@@ -310,36 +308,90 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
       <div className="flex-1 p-4 overflow-auto">
         <div className="bg-white rounded-2xl shadow overflow-hidden">
           
-          {/* Staff Tab Header */}
-          {activeTab === 'staff' && !isAddingStaff && !editingStaff && (
+          {/* Staff Tab Header - 修正：總是顯示 */}
+          {activeTab === 'staff' && (
             <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
               <span className="text-sm text-gray-500 font-bold">員工列表</span>
               <button onClick={openAddStaff} className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-1 hover:bg-green-700"><Plus size={16}/> 新增</button>
             </div>
           )}
 
-          {/* Staff Edit Form */}
+          {/* Staff Edit Form - 修正：改為彈出視窗 */}
           {(isAddingStaff || editingStaff) && (
-              <div className="p-6 bg-blue-50 border-b border-blue-100 animate-in fade-in">
-                <h3 className="font-bold text-blue-800 mb-4 flex items-center gap-2">{isAddingStaff ? <Plus size={20}/> : <Edit2 size={20}/>} {isAddingStaff ? "新增員工" : `編輯員工：${editingStaff[0]}`}</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div><label className="text-xs font-bold text-gray-500">姓名</label><input className="w-full p-2 border rounded mt-1" value={staffForm.name} onChange={e=>setStaffForm({...staffForm, name: e.target.value})} /></div>
-                  <div><label className="text-xs font-bold text-gray-500">密碼</label><input className="w-full p-2 border rounded mt-1" value={staffForm.password} onChange={e=>setStaffForm({...staffForm, password: e.target.value})} placeholder={!isAddingStaff ? "不修改請留空 (******)" : ""} /></div>
-                  <div><label className="text-xs font-bold text-gray-500">LINE ID</label><input className="w-full p-2 border rounded mt-1" value={staffForm.lineId} onChange={e=>setStaffForm({...staffForm, lineId: e.target.value})} /></div>
-                  {/* [新增] 班別輸入 */}
-                  <div><label className="text-xs font-bold text-gray-500">班別</label><input className="w-full p-2 border rounded mt-1" value={staffForm.shift} onChange={e=>setStaffForm({...staffForm, shift: e.target.value})} placeholder="例如：早班" /></div>
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
                   
-                  <div>
-                    <label className="text-xs font-bold text-gray-500">特殊權限</label>
-                    <div className="flex gap-4 mt-2">
-                      <label className="flex items-center gap-1"><input type="checkbox" checked={staffForm.needReset === 'TRUE'} onChange={e=>setStaffForm({...staffForm, needReset: e.target.checked?'TRUE':'FALSE'})} /> 需重設密碼</label>
-                      <label className="flex items-center gap-1"><input type="checkbox" checked={staffForm.allowRemote === 'TRUE'} onChange={e=>setStaffForm({...staffForm, allowRemote: e.target.checked?'TRUE':'FALSE'})} /> 允許遠端</label>
+                  {/* Modal Header */}
+                  <div className="flex justify-between items-center mb-6 border-b pb-4">
+                     <h3 className="font-bold text-xl text-gray-800 flex items-center gap-2">
+                       {isAddingStaff ? 
+                         <div className="bg-green-100 p-2 rounded-full text-green-600"><Plus size={24}/></div> : 
+                         <div className="bg-blue-100 p-2 rounded-full text-blue-600"><Edit2 size={24}/></div>
+                       }
+                       {isAddingStaff ? "新增員工" : "編輯員工"}
+                     </h3>
+                     <button onClick={() => { setIsAddingStaff(false); setEditingStaff(null); }} className="text-gray-400 hover:text-gray-600 transition p-2 hover:bg-gray-100 rounded-full">
+                       <X size={24} />
+                     </button>
+                  </div>
+
+                  {/* Form Content */}
+                  <div className="grid grid-cols-1 gap-4 mb-6">
+                    <div>
+                        <label className="text-sm font-bold text-gray-500 mb-1 block">姓名</label>
+                        <input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition" 
+                               value={staffForm.name} 
+                               onChange={e=>setStaffForm({...staffForm, name: e.target.value})} 
+                               placeholder="輸入姓名" />
+                    </div>
+                    <div>
+                        <label className="text-sm font-bold text-gray-500 mb-1 block">密碼</label>
+                        <input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition" 
+                               value={staffForm.password} 
+                               onChange={e=>setStaffForm({...staffForm, password: e.target.value})} 
+                               placeholder={!isAddingStaff ? "不修改請留空 (******)" : "預設密碼"} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-sm font-bold text-gray-500 mb-1 block">LINE ID</label>
+                            <input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition" 
+                                   value={staffForm.lineId} 
+                                   onChange={e=>setStaffForm({...staffForm, lineId: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="text-sm font-bold text-gray-500 mb-1 block">班別</label>
+                            <input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition" 
+                                   value={staffForm.shift} 
+                                   onChange={e=>setStaffForm({...staffForm, shift: e.target.value})} 
+                                   placeholder="例如：早班" />
+                        </div>
+                    </div>
+                    
+                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                      <label className="text-sm font-bold text-gray-500 mb-3 block">帳號權限設定</label>
+                      <div className="flex flex-col gap-3">
+                        <label className="flex items-center gap-3 cursor-pointer group">
+                            <input type="checkbox" className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" 
+                                   checked={staffForm.needReset === 'TRUE'} 
+                                   onChange={e=>setStaffForm({...staffForm, needReset: e.target.checked?'TRUE':'FALSE'})} /> 
+                            <span className="text-gray-700 font-medium group-hover:text-blue-600 transition">下次登入需重設密碼</span>
+                        </label>
+                        <label className="flex items-center gap-3 cursor-pointer group">
+                            <input type="checkbox" className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" 
+                                   checked={staffForm.allowRemote === 'TRUE'} 
+                                   onChange={e=>setStaffForm({...staffForm, allowRemote: e.target.checked?'TRUE':'FALSE'})} /> 
+                            <span className="text-gray-700 font-medium group-hover:text-blue-600 transition">允許遠端打卡 (免 GPS 檢查)</span>
+                        </label>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={handleSaveStaff} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 flex items-center gap-2"><Save size={16}/> 儲存</button>
-                  <button onClick={() => { setIsAddingStaff(false); setEditingStaff(null); }} className="bg-gray-300 text-gray-700 px-6 py-2 rounded-lg font-bold hover:bg-gray-400 flex items-center gap-2"><X size={16}/> 取消</button>
+
+                  {/* Footer Buttons */}
+                  <div className="flex gap-3">
+                    <button onClick={() => { setIsAddingStaff(false); setEditingStaff(null); }} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition">取消</button>
+                    <button onClick={handleSaveStaff} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition flex items-center justify-center gap-2"><Save size={18}/> 儲存變更</button>
+                  </div>
+
                 </div>
               </div>
           )}
@@ -358,7 +410,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
             </div>
           )}
 
-          {/* [新增] Shift Tab Header */}
+          {/* Shift Tab Header */}
           {activeTab === 'shift' && (
             <div className="p-4 bg-blue-50 border-b border-blue-100 grid gap-3">
               <h3 className="text-sm font-bold text-blue-800 flex items-center gap-2"><Plus size={16}/> 新增班別</h3>
