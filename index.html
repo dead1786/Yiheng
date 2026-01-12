@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+    
+    <title>線上打卡</title>
+
+    <link rel="icon" type="image/png" href="/YihengLOGO.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/YihengLOGO.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="線上打卡">
+    <meta name="theme-color" content="#2563eb">
+
+    <meta property="og:title" content="線上打卡" />
+    <meta property="og:description" content="益恆科技打卡系統" />
+    <meta property="og:image" content="/YihengLOGO.png" />
+    <meta property="og:type" content="website" />
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/index.css">
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+      html, body {
+        font-family: 'Noto Sans TC', sans-serif;
+        overscroll-behavior-y: none; 
+        margin: 0;
+        padding: 0;
+        background-color: #f9fafb;
+      }
+      #root {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+    </style>
+    <script type="importmap">
+    {
+      "imports": {
+        "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+        "react/": "https://aistudiocdn.com/react@^19.2.0/",
+        "react": "https://aistudiocdn.com/react@^19.2.0",
+        "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
+      }
+    }
+    </script>
+  </head>
+  <body class="antialiased text-slate-800">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
