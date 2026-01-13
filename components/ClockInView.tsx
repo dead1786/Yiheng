@@ -47,7 +47,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
       return;
     }
     if (retryCount > 0) setStatus(`定位校正中... (第 ${retryCount} 次)`);
-    else setStatus('定位更新中...'); // [修改] 狀態文字微調，讓使用者知道正在刷新
+    else setStatus('定位更新中...');
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -59,14 +59,9 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
         if (retryCount < 3) {
           setTimeout(() => getLocationWithRetry(retryCount + 1), 1500);
         } else {
-          // 只有在真的完全抓不到時才顯示錯誤，避免因為頻繁更新時的短暫 timeout 嚇到使用者
           if (!coords) setStatus('❌ 無法取得定位 (請重整網頁)');
         }
       },
-      // [修改] 優化 GPS 參數：
-      // timeout: 8000 -> 10000 (給手機更多時間鎖定衛星)
-      // maximumAge: 0 (確保不使用快取，強制抓最新)
-      // enableHighAccuracy: true (強制開啟高精確度模式)
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
@@ -77,7 +72,16 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
         setLoadingHistory(true); 
     }
     try {
-        const res = await api.getHistory(user.name); 
+        // [修改] 傳入 loginTime
+        const res = await api.getHistory(user.name, user.loginTime);
+        
+        // [新增] 檢查強制登出
+        if (res.status === 'force_logout') {
+            onAlert(res.message);
+            onLogout();
+            return;
+        }
+
         if (res.success) { 
           setHistoryData(res.data); 
           localStorage.setItem(`cached_history_${user.name}`, JSON.stringify(res.data)); 
@@ -106,9 +110,6 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
     fetchHistory(false);
     
     getLocationWithRetry(0);
-    
-    // [修改] 自動更新頻率：30000ms (30秒) -> 10000ms (10秒)
-    // 提升即時性，減少移動後的定位延遲
     const intervalId = setInterval(() => getLocationWithRetry(0), 10000); 
 
     window.history.pushState({ view: 'root' }, '', '');
@@ -147,10 +148,18 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
   const canSubmit = coords || user.allowRemote;
 
   const handleClockIn = async (type: '上班' | '下班', force = false) => {
-    const payload = { name: user.name, station: selectedLoc, lat: coords ? coords.lat : 0, lng: coords ? coords.lng : 0, type, force };
+    // [修改] 傳入 loginTime
+    const payload = { name: user.name, station: selectedLoc, lat: coords ? coords.lat : 0, lng: coords ? coords.lng : 0, type, force, loginTime: user.loginTime };
     setIsClockingIn(true);
     const res = await api.clockIn(payload);
     setIsClockingIn(false);
+    
+    // [新增] 檢查強制登出
+    if (res.status === 'force_logout') {
+        onAlert(res.message);
+        onLogout();
+        return;
+    }
 
     if(res.success) {
       setResult(`${type}打卡成功！`); 
@@ -182,7 +191,6 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
 
   const isWeekend = (dayStr: string) => (dayStr === "週六" || dayStr === "週日");
 
-  // [新增] 嚴格判定今日邏輯 (解決 2026/1/11 vs 2026/01/11 格式問題)
   const isToday = (dateStr: string) => {
     if (!dateStr) return false;
     const d = new Date(dateStr);
@@ -194,7 +202,6 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
 
   const getRowStyle = (note: string, dayStr: string, dateStr: string) => { 
       let style = "transition-colors ";
-      // 如果是今天，使用醒目黃色底 + 深黃邊框
       if (isToday(dateStr)) {
           style += "bg-yellow-100 hover:bg-yellow-200 font-bold border-l-4 border-yellow-500 shadow-sm";
       } else {
@@ -208,7 +215,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
   
   const renderHistoryRows = () => { 
       if (!historyData || !historyData[historyTab] || historyData[historyTab].length === 0) 
-          return <tr><td colSpan={4} className="text-center py-8 text-gray-400">目前尚無資料</td></tr>; 
+          return <tr><td colSpan={5} className="text-center py-8 text-gray-400">目前尚無資料</td></tr>; 
       
       return historyData[historyTab].map((row: any, i: number) => { 
           const isLeave = row.note && (row.note.includes("假") || row.note.includes("特休") || row.note.includes("節")); 
@@ -219,6 +226,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
                 </td> 
                 <td className="px-2 py-3 text-blue-600 font-bold text-xs whitespace-pre-wrap">{row.in}</td> 
                 <td className="px-2 py-3 text-orange-500 font-bold text-xs whitespace-pre-wrap">{row.out}</td> 
+                <td className="px-2 py-3 text-gray-600 text-xs">{row.status}</td> 
                 <td className={`px-2 py-3 text-xs font-bold ${isLeave ? 'text-orange-600' : 'text-gray-400'}`}>{row.note}</td> 
             </tr> 
           ); 
@@ -279,7 +287,6 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
             </div> 
           )}
 
-          {/* 最近一次打卡時間顯示 */}
           <div className="text-center pt-2">
             <p className="text-xs text-gray-400 flex items-center justify-center gap-1">
               <Timer size={12} /> 最近打卡：{lastSuccess || '載入中...'}
@@ -291,13 +298,28 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
 
       {showHistory && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-2xl w-full max-w-sm h-[80vh] flex flex-col shadow-2xl">
+          <div className="bg-white rounded-2xl w-full max-w-md h-[80vh] flex flex-col shadow-2xl">
             <div className="p-4 border-b flex justify-between items-center"><h3 className="font-bold text-lg text-gray-800">打卡紀錄</h3><button onClick={() => setShowHistory(false)} className="text-gray-400 hover:text-gray-600"><X /></button></div>
             <div className="flex p-2 gap-2 bg-gray-50">
               <button onClick={() => setHistoryTab('current')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${historyTab === 'current' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>本月</button>
               <button onClick={() => setHistoryTab('last')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${historyTab === 'last' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>上月 ({historyData?.lastMonthName})</button>
             </div>
-            <div className="flex-1 overflow-auto p-4"><table className="w-full text-sm text-left"><thead className="text-xs text-gray-500 uppercase bg-gray-50 sticky top-0"><tr><th className="px-2 py-3">日期</th><th className="px-2 py-3">上班</th><th className="px-2 py-3">下班</th><th className="px-2 py-3">備註</th></tr></thead><tbody className="divide-y">{loadingHistory && !historyData ? (<tr><td colSpan={4} className="text-center py-10 text-gray-500">同步資料中...</td></tr>) : renderHistoryRows()}</tbody></table></div>
+            <div className="flex-1 overflow-auto p-4">
+                <table className="w-full text-sm text-left">
+                    <thead className="text-xs text-gray-500 uppercase bg-gray-50 sticky top-0">
+                        <tr>
+                            <th className="px-2 py-3">日期</th>
+                            <th className="px-2 py-3">上班</th>
+                            <th className="px-2 py-3">下班</th>
+                            <th className="px-2 py-3">狀態</th>
+                            <th className="px-2 py-3">備註</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                        {loadingHistory && !historyData ? (<tr><td colSpan={5} className="text-center py-10 text-gray-500">同步資料中...</td></tr>) : renderHistoryRows()}
+                    </tbody>
+                </table>
+            </div>
           </div>
         </div>
       )}

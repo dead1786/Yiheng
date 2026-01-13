@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
-import { Users, MessageSquare, MapPin, ClipboardList, LogOut, Plus, RefreshCw, Trash2, Edit2, FileText, X, Save, Unlock, Loader2, Unlink, FileSpreadsheet, Download, Clock } from 'lucide-react';
+import { Users, MessageSquare, MapPin, ClipboardList, LogOut, Plus, RefreshCw, Trash2, Edit2, FileText, X, Save, Unlock, Loader2, Unlink, FileSpreadsheet, Download, Clock, Ban } from 'lucide-react';
 
 interface Props {
   onBack: () => void;
@@ -243,6 +243,18 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
     });
   };
 
+  // [新增] 強制登出處理
+  const handleKickStaff = (name: string) => {
+    onConfirm(`⚠️ 確定要將 [${name}] 強制登出嗎？\n\n該員工下次操作時將被迫登出。`, async () => {
+      setBlockText("執行中...");
+      setIsBlocking(true);
+      const res = await api.adminUpdateStaff({ op: 'kick', targetName: name, adminName });
+      setIsBlocking(false);
+      if (res.success) { onAlert("✅ 已執行強制登出指令。"); fetchAllData(false); }
+      else { onAlert(res.message); }
+    });
+  };
+
   const openEditStaff = (row: any[]) => {
     setStaffForm({ 
         name: row[0], 
@@ -275,7 +287,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
 
   const getCellStyle = (headerName: string) => {
     if (!headerName) return "max-w-[150px] truncate";
-    if (headerName.includes("時間戳記") || headerName.includes("User ID") || headerName.includes("GPS") || headerName.includes("時間")) {
+    if (headerName.includes("時間戳記") || headerName.includes("User ID") || headerName.includes("GPS") || headerName.includes("時間") || headerName.includes("登出")) {
       return "whitespace-nowrap min-w-fit"; 
     }
     return "max-w-[150px] truncate";
@@ -308,7 +320,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
       <div className="flex-1 p-4 overflow-auto">
         <div className="bg-white rounded-2xl shadow overflow-hidden">
           
-          {/* Staff Tab Header - 修正：總是顯示 */}
+          {/* Staff Tab Header */}
           {activeTab === 'staff' && (
             <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
               <span className="text-sm text-gray-500 font-bold">員工列表</span>
@@ -316,12 +328,10 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
             </div>
           )}
 
-          {/* Staff Edit Form - 修正：改為彈出視窗 */}
+          {/* Staff Edit Form */}
           {(isAddingStaff || editingStaff) && (
               <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                 <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-                  
-                  {/* Modal Header */}
                   <div className="flex justify-between items-center mb-6 border-b pb-4">
                      <h3 className="font-bold text-xl text-gray-800 flex items-center gap-2">
                        {isAddingStaff ? 
@@ -335,7 +345,6 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                      </button>
                   </div>
 
-                  {/* Form Content */}
                   <div className="grid grid-cols-1 gap-4 mb-6">
                     <div>
                         <label className="text-sm font-bold text-gray-500 mb-1 block">姓名</label>
@@ -386,7 +395,6 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                     </div>
                   </div>
 
-                  {/* Footer Buttons */}
                   <div className="flex gap-3">
                     <button onClick={() => { setIsAddingStaff(false); setEditingStaff(null); }} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition">取消</button>
                     <button onClick={handleSaveStaff} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition flex items-center justify-center gap-2"><Save size={18}/> 儲存變更</button>
@@ -441,6 +449,8 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                     ))}
                     {activeTab === 'staff' && (
                       <td className="px-4 py-3 flex justify-end gap-2 items-center">
+                         {/* [新增] 強制登出按鈕 */}
+                        <button onClick={()=>handleKickStaff(row[0])} className="p-1.5 bg-yellow-100 text-yellow-600 hover:bg-yellow-200 rounded flex items-center gap-1 text-xs font-bold" title="強制登出"><Ban size={14}/> 踢除</button>
                         {row.includes("📱已綁定") && (
                            <button onClick={()=>handleUnbindStaff(row[0])} className="p-1.5 bg-orange-100 text-orange-600 hover:bg-orange-200 rounded flex items-center gap-1 text-xs font-bold" title="解除裝置綁定"><Unlink size={14}/> 解綁</button>
                         )}
