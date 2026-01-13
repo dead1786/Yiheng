@@ -4,6 +4,7 @@ import { ChangePasswordView } from './components/ChangePasswordView';
 import { ClockInView } from './components/ClockInView';
 import { AdminDashboardView } from './components/AdminDashboardView';
 import { Loader2, AlertTriangle, CheckCircle, Info } from 'lucide-react';
+import { api } from './services/api'; // [新增] 引入 api
 
 const ModalDialog = ({ isOpen, type, message, onConfirm, onCancel }: any) => {
   if (!isOpen) return null;
@@ -68,6 +69,29 @@ const App: React.FC = () => {
     setIsLoading(false);
   }, []);
 
+  // [新增] 背景檢查強制登出 (每 5 秒檢查一次)
+  useEffect(() => {
+    if (!user) return;
+    
+    const checkStatus = async () => {
+       try {
+         // 傳入 user.loginTime 讓後端比對
+         const res = await api.checkStatus(user.name, user.loginTime);
+         if (!res.success && res.status === 'force_logout') {
+            setUser(null);
+            setShowAdmin(false);
+            localStorage.removeItem('yh_app_session');
+            showAlert(res.message || "⚠️ 您已被管理員強制登出系統");
+         }
+       } catch(e) {
+         // 網路錯誤忽略，下次再試
+       }
+    };
+
+    const intervalId = setInterval(checkStatus, 5000); // 5秒
+    return () => clearInterval(intervalId);
+  }, [user]);
+
   const handleLogin = (userData: User) => {
     // [新增] 紀錄登入時間
     const userWithTime = { ...userData, loginTime: new Date().getTime() };
@@ -82,7 +106,7 @@ const App: React.FC = () => {
   // 1. 沒登入 -> 登入頁
   if (!user) return <LoginView onLogin={handleLogin} />;
   
-  // 2. 需改密碼 -> 改密碼頁 (這裡也要補上 Modal，以防萬一)
+  // 2. 需改密碼 -> 改密碼頁
   if (user.needReset) {
     return (
       <>
@@ -92,7 +116,7 @@ const App: React.FC = () => {
     );
   }
   
-  // 3. 管理員後台 (修正重點：必須把 ModalDialog 包進來)
+  // 3. 管理員後台
   if (showAdmin && user) {
     return (
       <>
@@ -102,7 +126,6 @@ const App: React.FC = () => {
           onConfirm={showConfirm} 
           adminName={user.name} 
         />
-        {/* 這行就是之前漏掉的，把它加回來，彈窗才會出現 */}
         <ModalDialog isOpen={modalConfig.isOpen} type={modalConfig.type} message={modalConfig.message} onConfirm={modalConfig.onConfirm} onCancel={modalConfig.onCancel} />
       </>
     );

@@ -26,6 +26,9 @@ export const api = {
   // [修改] 增加 loginTime 參數
   clockIn: (data: any) => post("clockIn", data),
   getHistory: (name: string, loginTime?: number) => post("getHistory", { name, loginTime }),
+
+  // [新增] 背景檢查狀態
+  checkStatus: (name: string, loginTime?: number) => post("checkStatus", { name, loginTime }),
   
   // 管理員功能
   adminGetData: (dataType: 'staff' | 'line' | 'location' | 'record' | 'log' | 'all' | 'shift', adminName?: string) => post("adminGetData", { dataType, adminName }),
@@ -33,6 +36,7 @@ export const api = {
   adminUpdateLocation: (data: any) => post("adminUpdateLocation", data),
   adminUpdateStaff: (data: any) => post("adminUpdateStaff", data), 
   
+  // [新增] 班別設定
   adminUpdateShift: (data: any) => post("adminUpdateShift", data),
   
   adminUnlockStaff: (targetName: string, adminName: string) => post("adminUnlockStaff", { targetName, adminName }),
