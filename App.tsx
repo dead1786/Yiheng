@@ -4,8 +4,9 @@ import { ChangePasswordView } from './components/ChangePasswordView';
 import { ClockInView } from './components/ClockInView';
 import { AdminDashboardView } from './components/AdminDashboardView';
 import { Loader2, AlertTriangle, CheckCircle, Info } from 'lucide-react';
-import { api } from './services/api'; // [新增] 引入 api
+import { api } from './services/api';
 
+// --- Modal Component (保持不變) ---
 const ModalDialog = ({ isOpen, type, message, onConfirm, onCancel }: any) => {
   if (!isOpen) return null;
   return (
@@ -34,7 +35,7 @@ interface User {
   loginTime?: number;
 }
 
-const SESSION_DURATION = 21 * 24 * 60 * 60 * 1000; // 21天 (毫秒)
+const SESSION_DURATION = 21 * 24 * 60 * 60 * 1000;
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -54,11 +55,10 @@ const App: React.FC = () => {
       try {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.name) {
-          // [新增] 檢查是否過期
           const loginTime = parsed.loginTime || 0;
           const now = new Date().getTime();
           if (now - loginTime > SESSION_DURATION) {
-            localStorage.removeItem('yh_app_session'); // 過期刪除
+            localStorage.removeItem('yh_app_session');
             setUser(null);
           } else {
             setUser(parsed);
@@ -69,73 +69,81 @@ const App: React.FC = () => {
     setIsLoading(false);
   }, []);
 
-  // [新增] 背景檢查強制登出 (每 5 秒檢查一次)
+  // [修改] 背景檢查邏輯：包含「強制登出」與「即時密碼重設」
   useEffect(() => {
     if (!user) return;
     
     const checkStatus = async () => {
        try {
-         // 傳入 user.loginTime 讓後端比對
          const res = await api.checkStatus(user.name, user.loginTime);
+         
+         // 情況 A: 強制登出
          if (!res.success && res.status === 'force_logout') {
             setUser(null);
             setShowAdmin(false);
             localStorage.removeItem('yh_app_session');
+            // 因為現在 ModalDialog 在最外層，這裡呼叫 showAlert 會正常顯示在 LoginView 之上
             showAlert(res.message || "⚠️ 您已被管理員強制登出系統");
+         } 
+         // 情況 B: 需重設密碼 (即時觸發)
+         else if (res.success && res.status === 'need_reset') {
+            if (!user.needReset) {
+                const updatedUser = { ...user, needReset: true };
+                setUser(updatedUser);
+                localStorage.setItem('yh_app_session', JSON.stringify(updatedUser));
+                showAlert("⚠️ 管理員要求您立即變更密碼！");
+            }
          }
-       } catch(e) {
-         // 網路錯誤忽略，下次再試
-       }
+       } catch(e) { }
     };
 
-    const intervalId = setInterval(checkStatus, 5000); // 5秒
+    const intervalId = setInterval(checkStatus, 5000);
     return () => clearInterval(intervalId);
   }, [user]);
 
   const handleLogin = (userData: User) => {
-    // [新增] 紀錄登入時間
     const userWithTime = { ...userData, loginTime: new Date().getTime() };
     setUser(userWithTime);
     localStorage.setItem('yh_app_session', JSON.stringify(userWithTime));
   };
-  const handleLogout = () => { showConfirm("確定要登出系統嗎？", () => { setUser(null); setShowAdmin(false); localStorage.removeItem('yh_app_session'); }); };
+  
+  // 修改：直接登出，不問問題
+  const handleLogout = () => { 
+    setUser(null); 
+    setShowAdmin(false); 
+    localStorage.removeItem('yh_app_session'); 
+  };
+  
   const handlePasswordChanged = () => { showAlert("密碼修改完成！請重新登入。"); setUser(null); localStorage.removeItem('yh_app_session'); };
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-blue-500" size={40} /></div>;
+  // [結構重構] 根據狀態決定主內容
+  const renderContent = () => {
+    if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-blue-500" size={40} /></div>;
+    
+    // 1. 沒登入 -> 登入頁
+    if (!user) return <LoginView onLogin={handleLogin} />;
 
-  // 1. 沒登入 -> 登入頁
-  if (!user) return <LoginView onLogin={handleLogin} />;
-  
-  // 2. 需改密碼 -> 改密碼頁
-  if (user.needReset) {
-    return (
-      <>
-        <ChangePasswordView user={user} onPasswordChanged={handlePasswordChanged} onAlert={showAlert} />
-        <ModalDialog isOpen={modalConfig.isOpen} type={modalConfig.type} message={modalConfig.message} onConfirm={modalConfig.onConfirm} onCancel={modalConfig.onCancel} />
-      </>
-    );
-  }
-  
-  // 3. 管理員後台
-  if (showAdmin && user) {
-    return (
-      <>
-        <AdminDashboardView 
-          onBack={() => setShowAdmin(false)} 
-          onAlert={showAlert} 
-          onConfirm={showConfirm} 
-          adminName={user.name} 
-        />
-        <ModalDialog isOpen={modalConfig.isOpen} type={modalConfig.type} message={modalConfig.message} onConfirm={modalConfig.onConfirm} onCancel={modalConfig.onCancel} />
-      </>
-    );
-  }
+    // 2. 需改密碼 -> 改密碼頁
+    if (user.needReset) return <ChangePasswordView user={user} onPasswordChanged={handlePasswordChanged} onAlert={showAlert} />;
 
-  // 4. 打卡首頁
+    // 3. 管理員後台
+    if (showAdmin && user) return <AdminDashboardView onBack={() => setShowAdmin(false)} onAlert={showAlert} onConfirm={showConfirm} adminName={user.name} />;
+
+    // 4. 打卡首頁
+    return <ClockInView user={user} onLogout={handleLogout} onAlert={showAlert} onConfirm={showConfirm} onEnterAdmin={() => setShowAdmin(true)} />;
+  };
+
+  // [關鍵] ModalDialog 放在最外層，永遠不會被 Unmount
   return (
     <>
-      <ClockInView user={user} onLogout={handleLogout} onAlert={showAlert} onConfirm={showConfirm} onEnterAdmin={() => setShowAdmin(true)} />
-      <ModalDialog isOpen={modalConfig.isOpen} type={modalConfig.type} message={modalConfig.message} onConfirm={modalConfig.onConfirm} onCancel={modalConfig.onCancel} />
+      {renderContent()}
+      <ModalDialog 
+        isOpen={modalConfig.isOpen} 
+        type={modalConfig.type} 
+        message={modalConfig.message} 
+        onConfirm={modalConfig.onConfirm} 
+        onCancel={modalConfig.onCancel} 
+      />
     </>
   );
 };
