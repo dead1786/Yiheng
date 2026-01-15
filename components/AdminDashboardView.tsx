@@ -408,11 +408,14 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
           {activeTab === 'location' && (
             <div className="p-4 bg-blue-50 border-b border-blue-100 grid gap-3">
               <h3 className="text-sm font-bold text-blue-800 flex items-center gap-2"><Plus size={16}/> 新增地點</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {/* [修改] 調整 Grid 佈局以容納 IP 輸入框 */}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                 <input placeholder="地點名稱" className="p-2 border rounded" value={newLoc.name} onChange={e=>setNewLoc({...newLoc, name: e.target.value})} />
                 <input placeholder="誤差(m)" className="p-2 border rounded" value={newLoc.radius} onChange={e=>setNewLoc({...newLoc, radius: e.target.value})} />
                 <input placeholder="緯度" className="p-2 border rounded" value={newLoc.lat} onChange={e=>setNewLoc({...newLoc, lat: e.target.value})} />
                 <input placeholder="經度" className="p-2 border rounded" value={newLoc.lng} onChange={e=>setNewLoc({...newLoc, lng: e.target.value})} />
+                {/* [新增] IP 輸入框 */}
+                <input placeholder="允許IP (選填)" className="p-2 border rounded" value={newLoc.ip} onChange={e=>setNewLoc({...newLoc, ip: e.target.value})} />
               </div>
               <button onClick={handleAddLocation} className="bg-blue-600 text-white py-2 rounded-lg font-bold hover:bg-blue-700 w-full md:w-auto">確認新增</button>
             </div>

@@ -26,8 +26,20 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
   
   const [coords, setCoords] = useState<{lat: number, lng: number} | null>(null);
   const [status, setStatus] = useState('定位中...');
+  // [新增] IP 狀態
+  const [clientIp, setClientIp] = useState('');
   
   const [isClockingIn, setIsClockingIn] = useState(false);
+
+  // [新增] 抓取 IP
+  useEffect(() => {
+    fetch('https://api.ipify.org?format=json')
+      .then(res => res.json())
+      .then(data => {
+        if(data.ip) setClientIp(data.ip);
+      })
+      .catch(e => console.log("IP Check Fail", e));
+  }, []);
   const [isGlobalLoading, setIsGlobalLoading] = useState(false);
   const [result, setResult] = useState('');
   
@@ -123,7 +135,11 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
       }
       if (exitIntentRef.current) return;
       else {
-        onConfirm("確定要離開打卡系統嗎？", () => { window.history.go(-2); });
+        // [修改] 增加 removeEventListener 確保能真的離開
+        onConfirm("確定要離開打卡系統嗎？", () => { 
+            window.removeEventListener('popstate', handlePopState);
+            window.history.go(-2); 
+        });
         exitIntentRef.current = true;
         window.history.pushState({ view: 'root' }, '', '');
         setTimeout(() => { exitIntentRef.current = false; }, 3000);
@@ -145,11 +161,25 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
     }
   }, [showHistory, showChangePwd]);
 
-  const canSubmit = coords || user.allowRemote;
+  // [新增] 檢查目前 IP 是否符合當選地點的 IP 設定
+  const currentLocData = locations.find(l => l.name === selectedLoc);
+  const isIpMatch = currentLocData && currentLocData.ip && clientIp && currentLocData.ip.includes(clientIp);
+
+  // [修改] 允許條件：GPS定位成功 OR 遠端權限 OR (有IP且IP符合該地點設定)
+  const canSubmit = coords || user.allowRemote || isIpMatch;
 
   const handleClockIn = async (type: '上班' | '下班', force = false) => {
-    // [修改] 傳入 loginTime
-    const payload = { name: user.name, station: selectedLoc, lat: coords ? coords.lat : 0, lng: coords ? coords.lng : 0, type, force, loginTime: user.loginTime };
+    // [修改] Payload 增加 ip 欄位
+    const payload = { 
+      name: user.name, 
+      station: selectedLoc, 
+      lat: coords ? coords.lat : 0, 
+      lng: coords ? coords.lng : 0, 
+      type, 
+      force, 
+      loginTime: user.loginTime,
+      ip: clientIp 
+    };
     setIsClockingIn(true);
     const res = await api.clockIn(payload);
     setIsClockingIn(false);
@@ -248,7 +278,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
             {user.isAdmin && (<button onClick={onEnterAdmin} className="bg-yellow-400 text-blue-900 p-2 rounded-full hover:bg-yellow-300 shadow-lg animate-bounce" title="管理員後台"><Crown size={18} /></button>)}
             <button onClick={() => setShowChangePwd(true)} className="bg-white/20 p-2 rounded-full hover:bg-white/30" title="修改密碼"><KeyRound size={18} /></button>
             <button onClick={() => fetchHistory(true)} className="bg-white/20 p-2 rounded-full hover:bg-white/30"><History size={18} /></button>
-            <button onClick={onLogout} className="bg-white/20 p-2 rounded-full hover:bg-white/30"><LogOut size={18} /></button>
+            <button onClick={() => onConfirm("確定要登出系統嗎？", onLogout)} className="bg-white/20 p-2 rounded-full hover:bg-white/30"><LogOut size={18} /></button>
           </div>
         </div>
         
