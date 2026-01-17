@@ -15,7 +15,32 @@ export const LoginView = ({ onLogin }: Props) => {
   const [showPassword, setShowPassword] = useState(false);
   
   // [新增] 忘記密碼流程狀態: 0=無, 1=輸入驗證碼, 2=輸入新密碼
+  // [新增] 忘記密碼流程狀態: 0=無, 1=輸入驗證碼, 2=輸入新密碼
   const [resetStep, setResetStep] = useState(0); 
+  // [新增] 倒數計時變數 (秒)
+  const [cooldown, setCooldown] = useState(0);
+
+  // [新增] 初始化：檢查是否有還沒跑完的倒數 (防止重整網頁後失效)
+  useEffect(() => {
+    const target = localStorage.getItem('reset_cool_target');
+    if (target) {
+      const left = Math.ceil((parseInt(target) - Date.now()) / 1000);
+      if (left > 0) setCooldown(left);
+    }
+  }, []);
+
+  // [新增] 計時器：每秒扣 1
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => {
+      setCooldown(prev => {
+        if (prev <= 1) return 0;
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
+
   const [resetCode, setResetCode] = useState('');
   const [newResetPwd, setNewResetPwd] = useState('');
   const [isResetting, setIsResetting] = useState(false);
@@ -66,6 +91,9 @@ export const LoginView = ({ onLogin }: Props) => {
     
     if (res.success) {
       setResetStep(1); // 進入輸入驗證碼階段
+      // 設定 10 分鐘 (600秒) 倒數，並存入 localStorage
+      setCooldown(600);
+      localStorage.setItem('reset_cool_target', (Date.now() + 600 * 1000).toString());
     } else {
       setError(res.message);
     }
@@ -158,10 +186,24 @@ export const LoginView = ({ onLogin }: Props) => {
             {loading ? (<div className="flex items-center justify-center gap-2"><Loader2 className="animate-spin" /> 登入中...</div>) : (<>登入系統 <ArrowRight size={22} strokeWidth={3} /></>)}
           </button>
           
-          {/* [新增] 忘記密碼按鈕 */}
+          {/* [新增] 忘記密碼按鈕 (含倒數顯示) */}
           <div className="text-center">
-             <button type="button" onClick={handleRequestReset} disabled={isResetting} className="text-sm font-bold text-slate-400 hover:text-[#28B89B] transition-colors underline decoration-dotted underline-offset-4">
-               {isResetting ? "處理中..." : "忘記密碼？"}
+             <button 
+               type="button" 
+               onClick={handleRequestReset} 
+               disabled={isResetting || cooldown > 0} 
+               className={`text-sm font-bold transition-colors underline decoration-dotted underline-offset-4 ${
+                 cooldown > 0 
+                   ? 'text-slate-300 cursor-not-allowed decoration-transparent' 
+                   : 'text-slate-400 hover:text-[#28B89B]'
+               }`}
+             >
+               {isResetting 
+                 ? "處理中..." 
+                 : (cooldown > 0 
+                     ? `請等待 ${Math.floor(cooldown / 60)}:${(cooldown % 60).toString().padStart(2, '0')} 後再試` 
+                     : "忘記密碼？")
+               }
              </button>
           </div>
         </form>
