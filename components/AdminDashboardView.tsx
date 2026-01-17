@@ -490,8 +490,13 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                        {recordList.map((row: any[], i: number) => {
                            const isSuccess = row[6]?.includes('成功');
-                           // 判斷方式 (GPS/IP) 通常在備註欄位 row[8]
-                           const method = row[8]?.includes('GPS') && row[8]?.includes('IP') ? 'GPS+IP' : (row[8]?.includes('GPS') ? 'GPS' : (row[8]?.includes('IP') ? 'IP' : '未知'));
+                           // [修改] 增加判斷「遠端」
+                           let method = '未知';
+                           const note = row[8] || '';
+                           if (note.includes('GPS') && note.includes('IP')) method = 'GPS+IP';
+                           else if (note.includes('GPS')) method = 'GPS';
+                           else if (note.includes('IP')) method = 'IP';
+                           else if (note.includes('遠端')) method = '遠端';
                            
                            return (
                            <div key={i} className="bg-[#1e293b] p-4 rounded-2xl shadow-sm border border-slate-700 flex flex-col gap-2">
@@ -716,9 +721,9 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                         {/* 上月 */}
                         <div>
                            <h4 className="text-slate-400 font-bold text-sm mb-2 sticky top-0 bg-[#1e293b] py-1">上月 ({historyModalData.lastMonthName})</h4>
-                           {historyModalData.last.current.length === 0 ? <p className="text-xs text-slate-500 text-center py-4">無資料</p> : (
+                           {historyModalData.last.length === 0 ? <p className="text-xs text-slate-500 text-center py-4">無資料</p> : (
                                <div className="space-y-2">
-                                  {historyModalData.last.current.map((row: any, i: number) => (
+                                  {historyModalData.last.map((row: any, i: number) => (
                                       <div key={i} className="grid grid-cols-[1.5fr_1fr_1fr_1fr] gap-2 text-xs bg-[#334155] p-3 rounded-xl border border-slate-700 items-center">
                                           {/* 日期 */}
                                           <span className="text-slate-300 font-mono font-bold">

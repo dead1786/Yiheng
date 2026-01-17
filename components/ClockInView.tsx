@@ -33,7 +33,7 @@ const LoadingOverlay = () => (
     <div className="bg-black/80 text-white px-8 py-6 rounded-2xl shadow-2xl flex flex-col items-center gap-4">
       <Loader2 className="animate-spin text-blue-400 w-10 h-10" />
       <span className="font-bold tracking-widest text-lg">處理中...</span>
-    </div>
+    </div>{/* Map Footer Info */}
   </div>
 );
 
@@ -447,13 +447,29 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
                    </span>
                 </div>
              </div>
-             <span className={`text-[10px] font-bold px-3 py-1 rounded-full ${
-                currentDist !== null && currentDist < (locations.find(l=>l.name===selectedLoc)?.radius || 500)
-                ? 'bg-[#dcfce7] text-[#0bc6a8]' 
-                : 'bg-red-50 text-red-500'
-             }`}>
-                {currentDist !== null && currentDist < (locations.find(l=>l.name===selectedLoc)?.radius || 500) ? '範圍內' : '範圍外'}
-             </span>
+             
+             {/* [修改] 右側狀態區：垂直排列 GPS 與 IP 狀態 */}
+             <div className="flex flex-col items-end gap-1">
+                 {/* GPS 狀態 */}
+                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    currentDist !== null && currentDist < (locations.find(l=>l.name===selectedLoc)?.radius || 500)
+                    ? 'bg-[#dcfce7] text-[#0bc6a8]' 
+                    : 'bg-red-50 text-red-500'
+                 }`}>
+                    {currentDist !== null && currentDist < (locations.find(l=>l.name===selectedLoc)?.radius || 500) ? 'GPS 範圍內' : 'GPS 範圍外'}
+                 </span>
+                 
+                 {/* [新增] IP 狀態 */}
+                 {locations.find(l=>l.name===selectedLoc)?.ip ? (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        isIpMatch ? 'bg-blue-50 text-blue-500' : 'bg-orange-50 text-orange-500'
+                    }`}>
+                        {isIpMatch ? 'IP 符合' : 'IP 不符'}
+                    </span>
+                 ) : (
+                    <span className="text-[10px] text-slate-300 font-bold px-1">無 IP 限制</span>
+                 )}
+             </div>
           </div>
         </div>
 
