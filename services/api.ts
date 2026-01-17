@@ -23,6 +23,7 @@ export const api = {
 
   // [新增] 忘記密碼 API
   requestReset: (name: string) => post("requestReset", { name }),
+  checkResetCode: (name: string, code: string) => post("checkResetCode", { name, code }),
   verifyReset: (name: string, code: string, newPassword: string) => post("verifyReset", { name, code, newPassword }),
 
   getLocations: () => post("getLocations"),
