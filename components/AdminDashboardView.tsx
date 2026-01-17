@@ -327,8 +327,19 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
             {mainTab === 'admin' && (
                 <div className="w-full md:max-w-2xl mx-auto bg-[#FF9800]/10 rounded-2xl p-6 border border-[#FF9800]/20 relative overflow-hidden shadow-md shadow-black/20">
                     <div className="flex justify-center mb-4 relative z-10">
-                        {/* [優化] 擴大點擊範圍，Input 直接覆蓋整個 label */}
-                        <label className="relative cursor-pointer group flex items-center justify-center">
+                        {/* [優化] 改用 onClick 直接觸發 showPicker，解決電腦版只能按邊邊的問題 */}
+                        <div 
+                            className="relative cursor-pointer group flex items-center justify-center"
+                            onClick={() => {
+                                // 抓取下方的 input 並強制開啟日曆
+                                const input = document.getElementById('stats-date-picker') as HTMLInputElement;
+                                if (input && 'showPicker' in input) {
+                                    (input as any).showPicker();
+                                } else {
+                                    input?.focus(); // 舊瀏覽器備案
+                                }
+                            }}
+                        >
                             <div className="text-[#FF9800] text-xs font-bold uppercase tracking-widest flex items-center gap-2 bg-[#FF9800]/10 px-4 py-2 rounded-full border border-[#FF9800]/20 group-hover:bg-[#FF9800]/20 transition select-none">
                                 <AlertTriangle size={14} /> 
                                 <span>
@@ -340,12 +351,13 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                                 <Edit2 size={12} className="opacity-50" />
                             </div>
                             <input 
+                                id="stats-date-picker"
                                 type="date" 
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                                className="absolute inset-0 w-full h-full opacity-0 pointer-events-none" 
                                 value={statsDate}
                                 onChange={(e) => setStatsDate(e.target.value)}
                             />
-                        </label>
+                        </div>
                     </div>
                     
                     <div className="flex items-center justify-around w-full relative z-10">
@@ -687,7 +699,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
         </div>
       )}
 
-      {/* [修正] 員工歷史紀錄 Modal */}
+      {/* 員工歷史紀錄 Modal */}
       {historyModalUser && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in" onClick={() => setHistoryModalUser(null)}>
              <div className="bg-[#1e293b] w-full max-w-md rounded-[2rem] shadow-2xl h-[80vh] flex flex-col border border-slate-700 overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -708,23 +720,18 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                      </div>
                  ) : historyModalData ? (
                      <div className="flex-1 flex flex-col overflow-hidden">
-                        {/* Tab Switcher */}
-                        <div className="flex p-3 gap-2 bg-[#1e293b] shrink-0">
-                          {/* 這裡使用簡單的 state 切換顯示內容，不需新增 state，直接用變數判斷即可，或預設顯示本月 */}
-                          {/* 為了簡化，我們直接列出本月與上月兩個區塊，或者用 Tab */}
-                        </div>
-
+                        
                         <div className="flex-1 overflow-y-auto p-0 scrollbar-hide">
                             {/* 本月區塊 */}
-                            <div className="sticky top-0 bg-[#0f172a] px-4 py-2 z-10 border-y border-slate-700">
+                            <div className="sticky top-0 bg-[#0f172a] px-4 py-2 z-10 border-y border-slate-700 shadow-sm">
                                 <span className="text-[#00bda4] font-bold text-sm">本月紀錄</span>
                             </div>
                             <table className="w-full text-sm text-left border-collapse">
                                 <thead className="text-xs text-slate-500 uppercase bg-[#1e293b]">
                                     <tr>
                                         <th className="px-4 py-3 font-bold">日期</th>
-                                        <th className="px-2 py-3 font-bold text-blue-400">上班</th>
-                                        <th className="px-2 py-3 font-bold text-orange-400">下班</th>
+                                        <th className="px-2 py-3 font-bold text-center text-blue-400">上班</th>
+                                        <th className="px-2 py-3 font-bold text-center text-orange-400">下班</th>
                                         <th className="px-2 py-3 font-bold text-right">狀態</th>
                                     </tr>
                                 </thead>
@@ -736,11 +743,12 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                                             const isLeave = row.note && (row.note.includes("假") || row.note.includes("休") || row.note.includes("節"));
                                             return (
                                                 <tr key={i} className="hover:bg-slate-800/50 transition-colors">
-                                                    <td className="px-4 py-3 font-mono font-bold text-slate-300">
-                                                        {row.date.slice(5)} <span className="text-[10px] text-slate-500 ml-1">{row.day}</span>
+                                                    <td className="px-4 py-3">
+                                                        <div className="font-bold text-slate-200">{row.date.slice(5)}</div>
+                                                        <div className="text-[10px] text-slate-500 font-bold">{row.day}</div>
                                                     </td>
-                                                    <td className="px-2 py-3 font-bold text-blue-400">{row.in || '-'}</td>
-                                                    <td className="px-2 py-3 font-bold text-orange-400">{row.out || '-'}</td>
+                                                    <td className="px-2 py-3 font-bold text-center text-blue-400">{row.in || '-'}</td>
+                                                    <td className="px-2 py-3 font-bold text-center text-orange-400">{row.out || '-'}</td>
                                                     <td className="px-2 py-3 text-right">
                                                         {row.status ? (
                                                             <span className="bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded text-[10px] font-bold border border-red-500/20">{row.status}</span>
@@ -758,15 +766,15 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                             </table>
 
                             {/* 上月區塊 */}
-                            <div className="sticky top-0 bg-[#0f172a] px-4 py-2 z-10 border-y border-slate-700 mt-4">
+                            <div className="sticky top-0 bg-[#0f172a] px-4 py-2 z-10 border-y border-slate-700 mt-4 shadow-sm">
                                 <span className="text-slate-400 font-bold text-sm">上月紀錄 ({historyModalData.lastMonthName})</span>
                             </div>
                             <table className="w-full text-sm text-left border-collapse mb-8">
                                 <thead className="text-xs text-slate-500 uppercase bg-[#1e293b]">
                                     <tr>
                                         <th className="px-4 py-3 font-bold">日期</th>
-                                        <th className="px-2 py-3 font-bold text-blue-400/70">上班</th>
-                                        <th className="px-2 py-3 font-bold text-orange-400/70">下班</th>
+                                        <th className="px-2 py-3 font-bold text-center text-blue-400/70">上班</th>
+                                        <th className="px-2 py-3 font-bold text-center text-orange-400/70">下班</th>
                                         <th className="px-2 py-3 font-bold text-right">狀態</th>
                                     </tr>
                                 </thead>
@@ -776,11 +784,12 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                                     ) : (
                                         historyModalData.last.map((row: any, i: number) => (
                                             <tr key={i} className="hover:bg-slate-800/50 transition-colors opacity-70">
-                                                <td className="px-4 py-3 font-mono font-bold text-slate-400">
-                                                    {row.date.slice(5)} <span className="text-[10px] text-slate-600 ml-1">{row.day}</span>
+                                                <td className="px-4 py-3">
+                                                    <div className="font-bold text-slate-400">{row.date.slice(5)}</div>
+                                                    <div className="text-[10px] text-slate-600 font-bold">{row.day}</div>
                                                 </td>
-                                                <td className="px-2 py-3 font-bold text-blue-400/70">{row.in || '-'}</td>
-                                                <td className="px-2 py-3 font-bold text-orange-400/70">{row.out || '-'}</td>
+                                                <td className="px-2 py-3 font-bold text-center text-blue-400/70">{row.in || '-'}</td>
+                                                <td className="px-2 py-3 font-bold text-center text-orange-400/70">{row.out || '-'}</td>
                                                 <td className="px-2 py-3 text-right">
                                                     {row.status ? (
                                                         <span className="bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded text-[10px] font-bold border border-red-500/20">{row.status}</span>
