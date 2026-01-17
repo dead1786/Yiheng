@@ -264,7 +264,12 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
   const handleChangePassword = async () => {
     if (!pwdForm.old || !pwdForm.new1 || !pwdForm.new2) return onAlert("請填寫所有欄位");
     if (pwdForm.new1 !== pwdForm.new2) return onAlert("兩次新密碼輸入不一致");
-    if (pwdForm.new1.length < 4) return onAlert("新密碼至少需要 4 位數");
+    
+    // [修改] 驗證：至少4位數字，且開頭不為0
+    if (!/^[1-9]\d{3,}$/.test(pwdForm.new1)) {
+        return onAlert("密碼格式錯誤：需為至少 4 位數字，且開頭不能為 0");
+    }
+
     setIsGlobalLoading(true);
     const res = await api.updatePassword(user.name, pwdForm.old, pwdForm.new1);
     setIsGlobalLoading(false);
