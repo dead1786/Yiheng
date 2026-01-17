@@ -175,11 +175,19 @@ export const LoginView = ({ onLogin }: Props) => {
               {loading ? <><Loader2 className="animate-spin" /> 登入中...</> : <>登入系統 <ArrowRight size={22} strokeWidth={3} /></>}
             </button>
             
-            <div className="text-center">
+            <div className="text-center flex flex-col gap-3 mt-4">
+               {/* 發送驗證碼按鈕 */}
                <button type="button" onClick={handleRequestReset} disabled={isResetting || cooldown > 0} 
                  className={`text-sm font-bold transition-colors underline decoration-dotted underline-offset-4 ${cooldown > 0 ? 'text-slate-300 cursor-not-allowed decoration-transparent' : 'text-slate-400 hover:text-[#28B89B]'}`}>
                  {isResetting ? "處理中..." : (cooldown > 0 ? `請等待 ${Math.floor(cooldown / 60)}:${(cooldown % 60).toString().padStart(2, '0')} 後再試` : "忘記密碼？")}
                </button>
+               
+               {/* [新增] 回到輸入驗證碼按鈕 (只在倒數期間顯示) */}
+               {cooldown > 0 && (
+                 <button type="button" onClick={() => setResetStep(1)} className="text-sm font-bold text-[#28B89B] hover:text-[#1e8f78] transition-colors flex items-center justify-center gap-1 animate-in fade-in slide-in-from-bottom-2">
+                   <MessageSquare size={16}/> 我已收到驗證碼，前往輸入
+                 </button>
+               )}
             </div>
           </form>
         )}
