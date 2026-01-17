@@ -44,6 +44,9 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
   const [isAddingStaff, setIsAddingStaff] = useState(false);
   const [editingStaff, setEditingStaff] = useState<any>(null);
   const [staffForm, setStaffForm] = useState({ name: '', password: '123', lineId: '', needReset: 'TRUE', allowRemote: 'FALSE', shift: '' });
+  
+  // [修改] 地點相關 State
+  const [editingLoc, setEditingLoc] = useState<any>(null); // 紀錄目前正在編輯的舊資料
   const [newLoc, setNewLoc] = useState({ name: '', lat: '', lng: '', radius: '500', ip: '' });
   const [newShift, setNewShift] = useState({ name: '', start: '09:00', end: '18:00' });
   const [exportSheet, setExportSheet] = useState('');
@@ -186,10 +189,21 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
     }
     if(await handleAction("儲存中...", api.adminUpdateStaff({ op: isAddingStaff ? 'add' : 'edit', adminName, oldName: editingStaff ? editingStaff[0] : null, newData: staffForm }))) { setIsAddingStaff(false); setEditingStaff(null); }
   };
-  const handleAddLocation = async () => {
+  const handleSaveLocation = async () => {
     if (!newLoc.name || !newLoc.lat) return onAlert("請填寫資訊");
-    if(await handleAction("新增中...", api.adminUpdateLocation({ ...newLoc, op: 'add', adminName }))) setNewLoc({name:'', lat:'', lng:'', radius:'500', ip:''});
+    
+    const op = editingLoc ? 'edit' : 'add';
+    const actionName = editingLoc ? "更新中..." : "新增中...";
+    const payload = { ...newLoc, op, adminName, oldName: editingLoc ? editingLoc[0] : null };
+
+    if(await handleAction(actionName, api.adminUpdateLocation(payload))) {
+        setNewLoc({name:'', lat:'', lng:'', radius:'500', ip:''});
+        setEditingLoc(null); // 重置編輯狀態
+    }
   };
+  // 順手補上地點刪除的前端串接
+  const handleDeleteLocation = (name: string) => onConfirm(`確定刪除地點 [${name}]？`, () => handleAction("刪除中...", api.adminUpdateLocation({ op: 'delete', targetName: name, adminName })));
+
   const handleAddShift = async () => {
     if (!newShift.name || !newShift.start || !newShift.end) return onAlert("請填寫資訊");
     if(await handleAction("新增中...", api.adminUpdateShift({ ...newShift, op: 'add', adminName }))) setNewShift({ name: '', start: '09:00', end: '18:00' });
@@ -313,11 +327,10 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
             {mainTab === 'admin' && (
                 <div className="w-full md:max-w-2xl mx-auto bg-[#FF9800]/10 rounded-2xl p-6 border border-[#FF9800]/20 relative overflow-hidden shadow-md shadow-black/20">
                     <div className="flex justify-center mb-4 relative z-10">
-                        {/* 使用 relative Group 讓 input 可以覆蓋整個按鈕 */}
-                        <div className="relative group cursor-pointer">
-                            <div className="text-[#FF9800] text-xs font-bold uppercase tracking-widest flex items-center gap-2 bg-[#FF9800]/10 px-3 py-1 rounded-full border border-[#FF9800]/20 group-hover:bg-[#FF9800]/20 transition">
+                        {/* [優化] 擴大點擊範圍，Input 直接覆蓋整個 label */}
+                        <label className="relative cursor-pointer group flex items-center justify-center">
+                            <div className="text-[#FF9800] text-xs font-bold uppercase tracking-widest flex items-center gap-2 bg-[#FF9800]/10 px-4 py-2 rounded-full border border-[#FF9800]/20 group-hover:bg-[#FF9800]/20 transition select-none">
                                 <AlertTriangle size={14} /> 
-                                {/* 顯示日期與星期 */}
                                 <span>
                                   異常警示 ({statsDate}) 
                                   <span className="ml-1 opacity-70">
@@ -326,14 +339,13 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                                 </span>
                                 <Edit2 size={12} className="opacity-50" />
                             </div>
-                            {/* Input 設為絕對定位，覆蓋整個父層 div，確保點擊必中 */}
                             <input 
                                 type="date" 
                                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                                 value={statsDate}
                                 onChange={(e) => setStatsDate(e.target.value)}
                             />
-                        </div>
+                        </label>
                     </div>
                     
                     <div className="flex items-center justify-around w-full relative z-10">
@@ -440,7 +452,9 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
             {mainTab === 'admin' && subTab === 'location' && (
                 <>
                     <div className="bg-[#1e293b] p-6 rounded-2xl shadow-md border border-slate-700 md:max-w-3xl md:mx-auto w-full">
-                        <h4 className="font-bold mb-4 text-slate-300 flex items-center gap-2"><Plus size={16} className="text-[#00bda4]"/> 新增打卡地點</h4>
+                        <h4 className="font-bold mb-4 text-slate-300 flex items-center gap-2">
+                           {editingLoc ? <><Edit2 size={16} className="text-blue-400"/> 編輯打卡地點</> : <><Plus size={16} className="text-[#00bda4]"/> 新增打卡地點</>}
+                        </h4>
                         <div className="grid grid-cols-2 gap-3 mb-4">
                             <input placeholder="名稱" value={newLoc.name} onChange={e=>setNewLoc({...newLoc, name: e.target.value})} className="p-3 bg-[#334155] text-white placeholder-slate-500 rounded-lg text-sm font-bold outline-none focus:ring-1 focus:ring-[#00bda4]" />
                             <input placeholder="誤差(m)" value={newLoc.radius} onChange={e=>setNewLoc({...newLoc, radius: e.target.value})} className="p-3 bg-[#334155] text-white placeholder-slate-500 rounded-lg text-sm font-bold outline-none focus:ring-1 focus:ring-[#00bda4]" />
@@ -448,17 +462,34 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                             <input placeholder="經度" value={newLoc.lng} onChange={e=>setNewLoc({...newLoc, lng: e.target.value})} className="p-3 bg-[#334155] text-white placeholder-slate-500 rounded-lg text-sm font-bold outline-none focus:ring-1 focus:ring-[#00bda4]" />
                             <input placeholder="IP (選填)" value={newLoc.ip} onChange={e=>setNewLoc({...newLoc, ip: e.target.value})} className="col-span-2 p-3 bg-[#334155] text-white placeholder-slate-500 rounded-lg text-sm font-bold outline-none focus:ring-1 focus:ring-[#00bda4]" />
                         </div>
-                        <button onClick={handleAddLocation} className="w-full bg-[#00bda4] text-white font-bold py-3 rounded-xl shadow-lg shadow-[#00bda4]/20 hover:bg-[#00a892] active:scale-[0.98]">新增</button>
+                        <div className="flex gap-2">
+                            {editingLoc && (
+                                <button onClick={() => { setEditingLoc(null); setNewLoc({name:'', lat:'', lng:'', radius:'500', ip:''}); }} className="w-24 bg-slate-700 text-slate-300 font-bold py-3 rounded-xl hover:bg-slate-600">取消</button>
+                            )}
+                            <button onClick={handleSaveLocation} className={`flex-1 font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-[0.98] ${editingLoc ? 'bg-blue-500 text-white shadow-blue-500/20 hover:bg-blue-600' : 'bg-[#00bda4] text-white shadow-[#00bda4]/20 hover:bg-[#00a892]'}`}>
+                                {editingLoc ? <><Save size={18}/> 儲存變更</> : "新增"}
+                            </button>
+                        </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {locList.map((row: any[], i: number) => (
-                            <div key={i} className="bg-[#1e293b] p-5 rounded-2xl shadow-sm border border-slate-700">
-                                <div className="flex justify-between">
-                                    <p className="font-extrabold text-slate-200 text-lg">{row[0]}</p>
-                                    <span className="text-xs bg-slate-700 px-2 py-1 rounded text-slate-300 font-bold h-fit">{row[3]}m</span>
+                            <div key={i} className="bg-[#1e293b] p-5 rounded-2xl shadow-sm border border-slate-700 flex justify-between items-start group">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                       <p className="font-extrabold text-slate-200 text-lg">{row[0]}</p>
+                                       <span className="text-xs bg-slate-700 px-2 py-1 rounded text-slate-300 font-bold h-fit">{row[3]}m</span>
+                                    </div>
+                                    <p className="text-xs text-slate-500 mt-2 font-mono">{row[1]}, {row[2]}</p>
+                                    {row[4] && <p className="text-xs text-slate-500 mt-1">IP: {row[4]}</p>}
                                 </div>
-                                <p className="text-xs text-slate-500 mt-2 font-mono">{row[1]}, {row[2]}</p>
-                                {row[4] && <p className="text-xs text-slate-500 mt-1">IP: {row[4]}</p>}
+                                <div className="flex flex-col gap-2">
+                                     <button onClick={() => { setEditingLoc(row); setNewLoc({name: row[0], lat: row[1], lng: row[2], radius: row[3], ip: row[4] || ''}); window.scrollTo({top:0, behavior:'smooth'}); }} className="p-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500/20">
+                                         <Edit2 size={16}/>
+                                     </button>
+                                     <button onClick={() => handleDeleteLocation(row[0])} className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20">
+                                         <Trash2 size={16}/>
+                                     </button>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -598,8 +629,9 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
       
       {/* Add/Edit Staff Modal */}
       {(isAddingStaff || editingStaff) && (
-        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in">
-            <div className="bg-[#1e293b] w-full sm:max-w-md rounded-t-[2rem] sm:rounded-[2rem] p-6 shadow-2xl animate-in slide-in-from-bottom-4 border border-slate-700">
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in" onClick={() => { setIsAddingStaff(false); setEditingStaff(null); }}>
+            {/* [修改] 阻止冒泡，避免點擊內容時關閉 */}
+            <div className="bg-[#1e293b] w-full sm:max-w-md rounded-t-[2rem] sm:rounded-[2rem] p-6 shadow-2xl animate-in slide-in-from-bottom-4 border border-slate-700" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="font-bold text-xl text-white flex items-center gap-2">
                         {isAddingStaff ? <div className="bg-[#00bda4]/10 p-2 rounded-full text-[#00bda4]"><Plus size={20}/></div> : <div className="bg-blue-500/10 p-2 rounded-full text-blue-400"><Edit2 size={20}/></div>}
@@ -635,8 +667,8 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
 
       {/* Stats Detail Modal */}
       {statModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in">
-             <div className="bg-[#1e293b] w-full max-w-sm rounded-[2rem] p-6 shadow-2xl max-h-[70vh] flex flex-col border border-slate-700">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in" onClick={() => setStatModal(null)}>
+             <div className="bg-[#1e293b] w-full max-w-sm rounded-[2rem] p-6 shadow-2xl max-h-[70vh] flex flex-col border border-slate-700" onClick={e => e.stopPropagation()}>
                  <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-4">
                      <h3 className="font-bold text-lg text-white">{statModal.title}</h3>
                      <button onClick={() => setStatModal(null)} className="bg-slate-800 text-slate-400 p-2 rounded-full hover:text-white"><X size={16}/></button>
@@ -655,10 +687,10 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
         </div>
       )}
 
-      {/* [修正] 員工歷史紀錄 Modal (採用與 ClockInView 相同的 Table 樣式) */}
+      {/* [修正] 員工歷史紀錄 Modal */}
       {historyModalUser && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in">
-             <div className="bg-[#1e293b] w-full max-w-md rounded-[2rem] shadow-2xl h-[80vh] flex flex-col border border-slate-700 overflow-hidden">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in" onClick={() => setHistoryModalUser(null)}>
+             <div className="bg-[#1e293b] w-full max-w-md rounded-[2rem] shadow-2xl h-[80vh] flex flex-col border border-slate-700 overflow-hidden" onClick={e => e.stopPropagation()}>
                  {/* Header */}
                  <div className="p-5 border-b border-slate-700 flex justify-between items-center bg-[#1e293b]">
                      <div>

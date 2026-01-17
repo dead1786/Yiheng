@@ -549,8 +549,8 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
 
       {/* Modal 部分保持原本功能 */}
       {showHistory && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-[2rem] w-full max-w-md h-[70vh] flex flex-col shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in" onClick={() => setShowHistory(false)}>
+          <div className="bg-white rounded-[2rem] w-full max-w-md h-[70vh] flex flex-col shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="p-5 border-b flex justify-between items-center bg-slate-50">
                 <h3 className="font-bold text-lg text-slate-800">打卡紀錄</h3>
                 <button onClick={() => setShowHistory(false)} className="bg-slate-200 p-2 rounded-full hover:bg-slate-300"><X size={16}/></button>
@@ -579,8 +579,8 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
       )}
 
       {showChangePwd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-[2rem] w-full max-w-xs shadow-2xl p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in" onClick={() => setShowChangePwd(false)}>
+          <div className="bg-white rounded-[2rem] w-full max-w-xs shadow-2xl p-6" onClick={e => e.stopPropagation()}>
             <div className="text-center mb-6">
               <div className="bg-blue-50 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-blue-500"><KeyRound size={28} /></div>
               <h3 className="font-black text-xl text-slate-800">修改密碼</h3>
