@@ -37,7 +37,13 @@ export const api = {
   
   adminUpdateLocation: (data: any) => post("adminUpdateLocation", data),
   adminUpdateStaff: (data: any) => post("adminUpdateStaff", data), 
+  
+  // [新增] 班別設定
   adminUpdateShift: (data: any) => post("adminUpdateShift", data),
+
+  // [新增] 查詢功能
+  adminGetDailyRecords: (date: string) => post("adminGetDailyRecords", { date }),
+  adminGetStaffHistory: (targetName: string) => post("adminGetStaffHistory", { targetName }),
   
   adminUnlockStaff: (targetName: string, adminName: string) => post("adminUnlockStaff", { targetName, adminName }),
 

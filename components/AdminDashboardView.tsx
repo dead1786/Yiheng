@@ -4,7 +4,7 @@ import {
   ShieldCheck, Search, Bell, Users, MapPin, Share, Activity, AlertTriangle, 
   Filter, Link, UserMinus, Lock, Unlock, Home, History, User, Settings,
   Download, FileSpreadsheet, Loader2, Unlink, Trash2, Plus, Edit2, X, Save,
-  Clock, MessageSquare, FileText, ChevronRight, AlertCircle, Menu, LogOut, LayoutDashboard
+  Clock, MessageSquare, FileText, ChevronRight, AlertCircle, Menu, LogOut, LayoutDashboard, Calendar
 } from 'lucide-react';
 
 interface Props {
@@ -49,8 +49,19 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
   const [exportSheet, setExportSheet] = useState('');
   const [sheetList, setSheetList] = useState<{name:string, label:string}[]>([]);
 
-  // Modals for Stats
+  // Modals for Stats & History
   const [statModal, setStatModal] = useState<{title: string, list: any[]} | null>(null);
+  
+  // [新增] 員工歷史紀錄 Modal 狀態
+  const [historyModalUser, setHistoryModalUser] = useState<string | null>(null);
+  const [historyModalData, setHistoryModalData] = useState<any>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  // [新增] 異常警示日期狀態
+  const [statsDate, setStatsDate] = useState(() => {
+     return new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  });
+  const [dailyRecords, setDailyRecords] = useState<any[]>([]); // 儲存特定日期的打卡紀錄
 
   useEffect(() => {
     fetchAllData();
@@ -61,6 +72,11 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
         }
     });
   }, []);
+
+  // [新增] 當日期改變時，重新抓取該日期的紀錄
+  useEffect(() => {
+    fetchDailyRecords(statsDate);
+  }, [statsDate]);
 
   // 切換主頁籤時重置子頁籤
   useEffect(() => {
@@ -79,15 +95,42 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
     }
   };
 
+  // [新增] 抓取單日紀錄
+  const fetchDailyRecords = async (date: string) => {
+     const res = await api.adminGetDailyRecords(date);
+     if (res.success) {
+        setDailyRecords(res.list);
+     }
+  };
+
+  // [新增] 開啟員工歷史紀錄
+  const openStaffHistory = async (targetName: string) => {
+      setHistoryModalUser(targetName);
+      setHistoryLoading(true);
+      setHistoryModalData(null);
+      
+      const res = await api.adminGetStaffHistory(targetName);
+      setHistoryLoading(false);
+      
+      if (res.success) {
+          setHistoryModalData(res.data);
+      } else {
+          onAlert("無法讀取紀錄");
+          setHistoryModalUser(null);
+      }
+  };
+
   // --- Logic Helpers ---
+  // [修改] 異常警示邏輯：改用 dailyRecords + 排除特定班別
   const getDailyStats = useMemo(() => {
-    if (!allData.record || !allData.staff || !allData.shift) return { late: [], early: [] };
+    // 如果還沒載入班別或員工資料，先回傳空
+    if (!allData.staff || !allData.shift) return { late: [], early: [] };
     
-    const todayStr = new Date().toLocaleDateString('zh-TW', {year:'numeric', month:'2-digit', day:'2-digit'}); // YYYY/MM/DD
-    const todayRecords = allData.record.list.filter((r: any[]) => r[1] === todayStr);
+    // 使用從後端抓回來的 dailyRecords (特定日期)，而不是 allData.record (最近100筆)
+    const recordsToAnalyze = dailyRecords;
     
     const staffShiftMap = new Map();
-    allData.staff.list.forEach((s: any[]) => staffShiftMap.set(s[0], s[7]));
+    allData.staff.list.forEach((s: any[]) => staffShiftMap.set(s[0], s[7])); // index 7 is shift
 
     const shiftTimeMap = new Map();
     allData.shift.list.forEach((s: any[]) => shiftTimeMap.set(s[0], { start: s[1], end: s[2] }));
@@ -96,7 +139,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
     const earlyList: any[] = [];
     const personRecords: {[key:string]: {in?: string, out?: string}} = {};
 
-    todayRecords.forEach((r: any[]) => {
+    recordsToAnalyze.forEach((r: any[]) => {
        const name = r[3], time = r[2], type = r[4];
        if(!personRecords[name]) personRecords[name] = {};
        if(type === '上班') { if(!personRecords[name].in || time < personRecords[name].in) personRecords[name].in = time; } 
@@ -105,15 +148,21 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
 
     Object.keys(personRecords).forEach(name => {
         const shiftName = staffShiftMap.get(name);
+        
+        // [修改] 排除 "大夜班" 和 "小夜/假日班"
+        if (shiftName === "大夜班" || shiftName === "小夜/假日班") return;
+
         const shift = shiftTimeMap.get(shiftName);
         const rec = personRecords[name];
         if (shift) {
+            // 判斷遲到 (上班時間 > 班表時間)
             if (rec.in && shift.start && rec.in > (shift.start + ":59")) lateList.push({ name, time: rec.in, shift: shift.start });
+            // 判斷早退 (下班時間 < 班表時間)
             if (rec.out && shift.end && rec.out < shift.end) earlyList.push({ name, time: rec.out, shift: shift.end });
         }
     });
     return { late: lateList, early: earlyList };
-  }, [allData]);
+  }, [allData, dailyRecords]);
 
   // --- Actions ---
   const handleAction = async (taskName: string, apiCall: Promise<any>) => {
@@ -130,15 +179,11 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
   const handleDeleteStaff = () => { if(editingStaff) onConfirm(`刪除員工 [${editingStaff[0]}]？`, async () => { if(await handleAction("刪除中...", api.adminUpdateStaff({ op: 'delete', targetName: editingStaff[0], adminName }))) setEditingStaff(null); }); };
   const handleSaveStaff = async () => {
     if (!staffForm.name || !staffForm.password) return onAlert("姓名與密碼必填");
-    
-    // [新增] 只有在新增或修改密碼時才驗證 (避免編輯時密碼欄位是 ******)
     if (staffForm.password !== '******') {
-       // [修改] 驗證：至少4位數字，且開頭不為0
        if (!/^[1-9]\d{3,}$/.test(staffForm.password)) {
           return onAlert("密碼格式錯誤：需為至少 4 位數字，且開頭不能為 0");
        }
     }
-
     if(await handleAction("儲存中...", api.adminUpdateStaff({ op: isAddingStaff ? 'add' : 'edit', adminName, oldName: editingStaff ? editingStaff[0] : null, newData: staffForm }))) { setIsAddingStaff(false); setEditingStaff(null); }
   };
   const handleAddLocation = async () => {
@@ -225,7 +270,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
              </div>
           </div>
 
-          {/* Sub-Nav Pills (Responsive) */}
+          {/* Sub-Nav Pills */}
           <div className="bg-[#0f172a] sticky top-[72px] md:top-0 z-30 pt-4 pb-2 px-4 md:px-8 md:pt-8 md:pb-6 border-b border-slate-800 md:bg-[#0f172a]/95 backdrop-blur">
              <div className="flex justify-between items-center mb-4 md:mb-6">
                 <h3 className="text-2xl font-bold text-white hidden md:block">
@@ -264,21 +309,30 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
           {/* Content Body */}
           <div className="p-4 md:p-8 flex flex-col gap-6 pb-24 md:pb-8 max-w-7xl mx-auto w-full">
             
-            {/* Stats Card (Responsive) */}
+            {/* [修改] 異常警示卡片：加入日期選擇功能 */}
             {mainTab === 'admin' && (
                 <div className="w-full md:max-w-2xl mx-auto bg-[#FF9800]/10 rounded-2xl p-6 border border-[#FF9800]/20 relative overflow-hidden shadow-md shadow-black/20">
                     <div className="flex justify-center mb-4 relative z-10">
-                        <p className="text-[#FF9800] text-xs font-bold uppercase tracking-widest flex items-center gap-2 bg-[#FF9800]/10 px-3 py-1 rounded-full border border-[#FF9800]/20">
-                            <AlertTriangle size={14} /> 異常警示 (今日)
-                        </p>
+                        <label className="text-[#FF9800] text-xs font-bold uppercase tracking-widest flex items-center gap-2 bg-[#FF9800]/10 px-3 py-1 rounded-full border border-[#FF9800]/20 cursor-pointer hover:bg-[#FF9800]/20 transition">
+                            <AlertTriangle size={14} /> 
+                            <span>異常警示 ({statsDate})</span>
+                            <Edit2 size={12} className="opacity-50" />
+                            {/* 隱藏的日期輸入框 */}
+                            <input 
+                                type="date" 
+                                className="absolute opacity-0 inset-0 cursor-pointer w-full h-full" 
+                                value={statsDate}
+                                onChange={(e) => setStatsDate(e.target.value)}
+                            />
+                        </label>
                     </div>
                     <div className="flex items-center justify-around w-full relative z-10">
-                        <button onClick={() => setStatModal({title: '今日遲到名單', list: getDailyStats.late})} className="flex-1 flex flex-col items-center justify-center active:opacity-70 transition group">
+                        <button onClick={() => setStatModal({title: `遲到名單 (${statsDate})`, list: getDailyStats.late})} className="flex-1 flex flex-col items-center justify-center active:opacity-70 transition group">
                             <span className="text-4xl font-black text-[#FF9800] mb-1 group-hover:scale-110 transition-transform drop-shadow-sm">{getDailyStats.late.length}</span>
                             <span className="text-xs font-bold text-[#FF9800]/70">遲到人數</span>
                         </button>
                         <div className="w-[1px] h-10 bg-[#FF9800]/20"></div>
-                        <button onClick={() => setStatModal({title: '今日早退名單', list: getDailyStats.early})} className="flex-1 flex flex-col items-center justify-center active:opacity-70 transition group">
+                        <button onClick={() => setStatModal({title: `早退名單 (${statsDate})`, list: getDailyStats.early})} className="flex-1 flex flex-col items-center justify-center active:opacity-70 transition group">
                             <span className="text-4xl font-black text-[#FF9800] mb-1 group-hover:scale-110 transition-transform drop-shadow-sm">{getDailyStats.early.length}</span>
                             <span className="text-xs font-bold text-[#FF9800]/70">早退人數</span>
                         </button>
@@ -286,7 +340,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                 </div>
             )}
 
-            {/* STAFF LIST (Grid Layout on Desktop) */}
+            {/* STAFF LIST */}
             {mainTab === 'admin' && subTab === 'staff' && (
                 <>
                     <div className="flex justify-between items-center px-1">
@@ -297,9 +351,12 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                         {staffList.map((row: any[], i: number) => {
                             const isLocked = row[5] === "🔒已鎖定";
                             return (
-                                <div key={i} onClick={() => openEditStaff(row)} className="flex flex-col gap-3 rounded-2xl bg-[#1e293b] p-5 shadow-md shadow-black/10 border border-slate-700 relative overflow-hidden active:scale-[0.99] transition cursor-pointer hover:border-[#00bda4]/50 hover:bg-[#253248]">
+                                <div key={i} 
+                                    // [修改] 點擊卡片 -> 開啟歷史紀錄
+                                    onClick={() => openStaffHistory(row[0])} 
+                                    className="flex flex-col gap-3 rounded-2xl bg-[#1e293b] p-5 shadow-md shadow-black/10 border border-slate-700 relative overflow-hidden active:scale-[0.99] transition cursor-pointer hover:border-[#00bda4]/50 hover:bg-[#253248]"
+                                >
                                     <div className="flex justify-between items-start">
-                                        {/* 移除圓形頭像，改為直接顯示資訊 */}
                                         <div className="flex flex-col gap-1 w-full overflow-hidden">
                                             <div className="flex items-center gap-2">
                                                 <p className="text-xl font-black text-slate-100 tracking-wide">{row[0]}</p>
@@ -310,9 +367,19 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                                             </p>
                                         </div>
                                         
-                                        {/* 狀態標籤 (靠右固定) */}
-                                        <div className={`flex shrink-0 items-center justify-center rounded-full px-2 py-1 border ${isLocked ? 'bg-[#FF9800]/10 text-[#FF9800] border-[#FF9800]/20' : 'bg-green-500/10 text-green-400 border-green-500/20'}`}>
-                                            <span className="text-[10px] font-bold whitespace-nowrap">{isLocked ? '已鎖定' : '正常'}</span>
+                                        <div className="flex flex-col gap-2 items-end">
+                                            {/* 狀態標籤 */}
+                                            <div className={`flex shrink-0 items-center justify-center rounded-full px-2 py-1 border ${isLocked ? 'bg-[#FF9800]/10 text-[#FF9800] border-[#FF9800]/20' : 'bg-green-500/10 text-green-400 border-green-500/20'}`}>
+                                                <span className="text-[10px] font-bold whitespace-nowrap">{isLocked ? '已鎖定' : '正常'}</span>
+                                            </div>
+                                            
+                                            {/* [新增] 鉛筆編輯按鈕 (阻止冒泡) */}
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); openEditStaff(row); }}
+                                                className="bg-blue-500/10 text-blue-400 p-1.5 rounded-lg border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
+                                            >
+                                                <Edit2 size={14} />
+                                            </button>
                                         </div>
                                     </div>
 
@@ -333,7 +400,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                 </>
             )}
 
-            {/* OTHER LISTS (Grid or Stack) */}
+            {/* Shift List */}
             {mainTab === 'admin' && subTab === 'shift' && (
                 <>
                     <div className="bg-[#1e293b] p-6 rounded-2xl shadow-md border border-slate-700 md:max-w-3xl md:mx-auto w-full">
@@ -404,7 +471,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                  </div>
             )}
 
-            {/* HISTORY (Grid on Desktop) */}
+            {/* HISTORY */}
             {mainTab === 'history' && (
                <div className="flex flex-col gap-4">
                    <div className="flex justify-between items-center mb-2 px-1">
@@ -450,7 +517,8 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                        <div key={i} className="bg-[#1e293b] p-4 rounded-2xl shadow-sm border border-slate-700">
                            <div className="flex justify-between mb-1">
                                <span className="font-bold text-[#00bda4] text-xs px-2 py-0.5 bg-[#00bda4]/10 rounded border border-[#00bda4]/20">{row[2]}</span>
-                               <span className="text-xs text-slate-500">{new Date(row[0]).toLocaleString()}</span>
+                               {/* [修改] 直接顯示字串，解決 Invalid Date 問題 */}
+                               <span className="text-xs text-slate-500">{row[0]}</span>
                            </div>
                            <p className="text-sm font-bold text-slate-300 mt-2">{row[3]}</p>
                            <p className="text-xs text-slate-600 mt-1">Admin: {row[1]}</p>
@@ -551,6 +619,63 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                         ))
                      }
                  </div>
+             </div>
+        </div>
+      )}
+
+      {/* [新增] 員工歷史紀錄 Modal */}
+      {historyModalUser && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in">
+             <div className="bg-[#1e293b] w-full max-w-md rounded-[2rem] p-6 shadow-2xl max-h-[80vh] flex flex-col border border-slate-700">
+                 <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-4">
+                     <div>
+                        <h3 className="font-bold text-lg text-white">{historyModalUser} 打卡紀錄</h3>
+                        <p className="text-xs text-slate-500">顯示本月與上月資料</p>
+                     </div>
+                     <button onClick={() => setHistoryModalUser(null)} className="bg-slate-800 text-slate-400 p-2 rounded-full hover:text-white"><X size={16}/></button>
+                 </div>
+                 
+                 {historyLoading ? (
+                     <div className="flex justify-center py-10"><Loader2 className="animate-spin text-[#00bda4]" /></div>
+                 ) : historyModalData ? (
+                     <div className="overflow-y-auto flex-1 space-y-4">
+                        {/* 本月 */}
+                        <div>
+                           <h4 className="text-[#00bda4] font-bold text-sm mb-2 sticky top-0 bg-[#1e293b] py-1">本月紀錄</h4>
+                           {historyModalData.current.length === 0 ? <p className="text-xs text-slate-500">無資料</p> : (
+                               <div className="space-y-2">
+                                  {historyModalData.current.map((row: any, i: number) => (
+                                      <div key={i} className="flex justify-between text-xs bg-[#334155] p-2 rounded border border-slate-700">
+                                          <span className="text-slate-300 w-16">{row.date}</span>
+                                          <span className="text-blue-300 w-12">{row.in || '-'}</span>
+                                          <span className="text-orange-300 w-12">{row.out || '-'}</span>
+                                          <span className="text-slate-400 truncate flex-1 text-right">{row.note}</span>
+                                      </div>
+                                  ))}
+                               </div>
+                           )}
+                        </div>
+
+                        {/* 上月 */}
+                        <div>
+                           <h4 className="text-slate-400 font-bold text-sm mb-2 sticky top-0 bg-[#1e293b] py-1">上月 ({historyModalData.lastMonthName})</h4>
+                           {historyModalData.last.length === 0 ? <p className="text-xs text-slate-500">無資料</p> : (
+                               <div className="space-y-2">
+                                  {historyModalData.last.map((row: any, i: number) => (
+                                      <div key={i} className="flex justify-between text-xs bg-[#334155]/50 p-2 rounded border border-slate-700/50">
+                                          <span className="text-slate-400 w-16">{row.date}</span>
+                                          <span className="text-blue-300/70 w-12">{row.in || '-'}</span>
+                                          <span className="text-orange-300/70 w-12">{row.out || '-'}</span>
+                                          <span className="text-slate-500 truncate flex-1 text-right">{row.note}</span>
+                                      </div>
+                                  ))}
+                               </div>
+                           )}
+                        </div>
+                     </div>
+                 ) : (
+                     <div className="text-center text-red-400 py-4">讀取失敗</div>
+                 )}
              </div>
         </div>
       )}
