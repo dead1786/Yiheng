@@ -214,7 +214,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
     setBlockText(`生成報表：${exportSheet}...`); setIsBlocking(true);
     try {
       const res = await api.adminDownloadExcel(adminName, exportSheet);
-      if (res.success && res.url) { window.open(res.url, '_blank'); onAlert("✅ 報表下載中..."); }
+      if (res.success && res.url) { window.open(res.url, '_blank'); onAlert("✅ 報表已下載..."); }
       else onAlert(res.message || "下載失敗");
     } catch(e) { onAlert("發生錯誤"); } finally { setIsBlocking(false); }
   };
