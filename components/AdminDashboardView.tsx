@@ -655,109 +655,116 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
         </div>
       )}
 
-      {/* [新增] 員工歷史紀錄 Modal */}
+      {/* [修正] 員工歷史紀錄 Modal (採用與 ClockInView 相同的 Table 樣式) */}
       {historyModalUser && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in">
-             <div className="bg-[#1e293b] w-full max-w-md rounded-[2rem] p-6 shadow-2xl max-h-[80vh] flex flex-col border border-slate-700">
-                 <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-4">
+             <div className="bg-[#1e293b] w-full max-w-md rounded-[2rem] shadow-2xl h-[80vh] flex flex-col border border-slate-700 overflow-hidden">
+                 {/* Header */}
+                 <div className="p-5 border-b border-slate-700 flex justify-between items-center bg-[#1e293b]">
                      <div>
                         <h3 className="font-bold text-lg text-white">{historyModalUser} 打卡紀錄</h3>
-                        <p className="text-xs text-slate-500">顯示本月與上月資料</p>
+                        <p className="text-xs text-slate-500">檢視詳細出勤狀況</p>
                      </div>
                      <button onClick={() => setHistoryModalUser(null)} className="bg-slate-800 text-slate-400 p-2 rounded-full hover:text-white"><X size={16}/></button>
                  </div>
                  
+                 {/* Content */}
                  {historyLoading ? (
-                     <div className="flex justify-center py-10"><Loader2 className="animate-spin text-[#00bda4]" /></div>
+                     <div className="flex-1 flex flex-col items-center justify-center gap-2">
+                        <Loader2 className="animate-spin text-[#00bda4] w-8 h-8" />
+                        <span className="text-xs text-slate-500">讀取中...</span>
+                     </div>
                  ) : historyModalData ? (
-                     <div className="overflow-y-auto flex-1 space-y-4">
-                        {/* 本月 */}
-                        <div>
-                           <h4 className="text-[#00bda4] font-bold text-sm mb-2 sticky top-0 bg-[#1e293b] py-1">本月紀錄</h4>
-
-                           {/* 列表標題列 */}
-                           <div className="grid grid-cols-[1.5fr_1fr_1fr_1fr] gap-2 px-2 mb-2 text-[10px] text-slate-500 font-bold">
-                               <div>日期</div>
-                               <div className="text-center">上班</div>
-                               <div className="text-center">下班</div>
-                               <div className="text-right">狀態</div>
-                           </div>
-
-                           {historyModalData.current.length === 0 ? <p className="text-xs text-slate-500 text-center py-4">無資料</p> : (
-                               <div className="space-y-2">
-                                  {historyModalData.current.map((row: any, i: number) => (
-                                      <div key={i} className="grid grid-cols-[1.5fr_1fr_1fr_1fr] gap-2 text-xs bg-[#334155] p-3 rounded-xl border border-slate-700 items-center">
-                                          {/* 日期 */}
-                                          <span className="text-slate-300 font-mono font-bold">
-                                            {row.date.replace(/^\d{4}\//, '')} {/* 只顯示 月/日 */}
-                                          </span>
-                                          
-                                          {/* 上班時間 */}
-                                          <span className={`text-center font-bold ${row.in ? 'text-blue-300' : 'text-slate-600'}`}>
-                                            {row.in || '-'}
-                                          </span>
-                                          
-                                          {/* 下班時間 */}
-                                          <span className={`text-center font-bold ${row.out ? 'text-orange-300' : 'text-slate-600'}`}>
-                                            {row.out || '-'}
-                                          </span>
-                                          
-                                          {/* 狀態 (遲到/早退) */}
-                                          <div className="text-right">
-                                            {row.status ? (
-                                                <span className="bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded text-[10px] font-bold">
-                                                    {row.status}
-                                                </span>
-                                            ) : (
-                                                <span className="text-slate-600 text-[10px]">正常</span>
-                                            )}
-                                          </div>
-                                      </div>
-                                  ))}
-                               </div>
-                           )}
+                     <div className="flex-1 flex flex-col overflow-hidden">
+                        {/* Tab Switcher */}
+                        <div className="flex p-3 gap-2 bg-[#1e293b] shrink-0">
+                          {/* 這裡使用簡單的 state 切換顯示內容，不需新增 state，直接用變數判斷即可，或預設顯示本月 */}
+                          {/* 為了簡化，我們直接列出本月與上月兩個區塊，或者用 Tab */}
                         </div>
 
-                        {/* 上月 */}
-                        <div>
-                           <h4 className="text-slate-400 font-bold text-sm mb-2 sticky top-0 bg-[#1e293b] py-1">上月 ({historyModalData.lastMonthName})</h4>
-                           {historyModalData.last.length === 0 ? <p className="text-xs text-slate-500 text-center py-4">無資料</p> : (
-                               <div className="space-y-2">
-                                  {historyModalData.last.map((row: any, i: number) => (
-                                      <div key={i} className="grid grid-cols-[1.5fr_1fr_1fr_1fr] gap-2 text-xs bg-[#334155] p-3 rounded-xl border border-slate-700 items-center">
-                                          {/* 日期 */}
-                                          <span className="text-slate-300 font-mono font-bold">
-                                            {row.date.replace(/^\d{4}\//, '')} {/* 只顯示 月/日 */}
-                                          </span>
-                                          
-                                          {/* 上班時間 */}
-                                          <span className={`text-center font-bold ${row.in ? 'text-blue-300' : 'text-slate-600'}`}>
-                                            {row.in || '-'}
-                                          </span>
-                                          
-                                          {/* 下班時間 */}
-                                          <span className={`text-center font-bold ${row.out ? 'text-orange-300' : 'text-slate-600'}`}>
-                                            {row.out || '-'}
-                                          </span>
-                                          
-                                          {/* 狀態 (遲到/早退) */}
-                                          <div className="text-right">
-                                            {row.status ? (
-                                                <span className="bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded text-[10px] font-bold">
-                                                    {row.status}
-                                                </span>
-                                            ) : (
-                                                <span className="text-slate-600 text-[10px]">正常</span>
-                                            )}
-                                          </div>
-                                      </div>
-                                  ))}
-                               </div>
-                           )}
+                        <div className="flex-1 overflow-y-auto p-0 scrollbar-hide">
+                            {/* 本月區塊 */}
+                            <div className="sticky top-0 bg-[#0f172a] px-4 py-2 z-10 border-y border-slate-700">
+                                <span className="text-[#00bda4] font-bold text-sm">本月紀錄</span>
+                            </div>
+                            <table className="w-full text-sm text-left border-collapse">
+                                <thead className="text-xs text-slate-500 uppercase bg-[#1e293b]">
+                                    <tr>
+                                        <th className="px-4 py-3 font-bold">日期</th>
+                                        <th className="px-2 py-3 font-bold text-blue-400">上班</th>
+                                        <th className="px-2 py-3 font-bold text-orange-400">下班</th>
+                                        <th className="px-2 py-3 font-bold text-right">狀態</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-700/50">
+                                    {historyModalData.current.length === 0 ? (
+                                        <tr><td colSpan={4} className="text-center py-6 text-slate-600 text-xs">無本月資料</td></tr>
+                                    ) : (
+                                        historyModalData.current.map((row: any, i: number) => {
+                                            const isLeave = row.note && (row.note.includes("假") || row.note.includes("休") || row.note.includes("節"));
+                                            return (
+                                                <tr key={i} className="hover:bg-slate-800/50 transition-colors">
+                                                    <td className="px-4 py-3 font-mono font-bold text-slate-300">
+                                                        {row.date.slice(5)} <span className="text-[10px] text-slate-500 ml-1">{row.day}</span>
+                                                    </td>
+                                                    <td className="px-2 py-3 font-bold text-blue-400">{row.in || '-'}</td>
+                                                    <td className="px-2 py-3 font-bold text-orange-400">{row.out || '-'}</td>
+                                                    <td className="px-2 py-3 text-right">
+                                                        {row.status ? (
+                                                            <span className="bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded text-[10px] font-bold border border-red-500/20">{row.status}</span>
+                                                        ) : (
+                                                            <span className={`text-[10px] font-bold ${isLeave ? 'text-orange-500' : 'text-slate-600'}`}>
+                                                                {isLeave ? row.note : '正常'}
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+
+                            {/* 上月區塊 */}
+                            <div className="sticky top-0 bg-[#0f172a] px-4 py-2 z-10 border-y border-slate-700 mt-4">
+                                <span className="text-slate-400 font-bold text-sm">上月紀錄 ({historyModalData.lastMonthName})</span>
+                            </div>
+                            <table className="w-full text-sm text-left border-collapse mb-8">
+                                <thead className="text-xs text-slate-500 uppercase bg-[#1e293b]">
+                                    <tr>
+                                        <th className="px-4 py-3 font-bold">日期</th>
+                                        <th className="px-2 py-3 font-bold text-blue-400/70">上班</th>
+                                        <th className="px-2 py-3 font-bold text-orange-400/70">下班</th>
+                                        <th className="px-2 py-3 font-bold text-right">狀態</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-700/50">
+                                    {historyModalData.last.length === 0 ? (
+                                        <tr><td colSpan={4} className="text-center py-6 text-slate-600 text-xs">無上月資料</td></tr>
+                                    ) : (
+                                        historyModalData.last.map((row: any, i: number) => (
+                                            <tr key={i} className="hover:bg-slate-800/50 transition-colors opacity-70">
+                                                <td className="px-4 py-3 font-mono font-bold text-slate-400">
+                                                    {row.date.slice(5)} <span className="text-[10px] text-slate-600 ml-1">{row.day}</span>
+                                                </td>
+                                                <td className="px-2 py-3 font-bold text-blue-400/70">{row.in || '-'}</td>
+                                                <td className="px-2 py-3 font-bold text-orange-400/70">{row.out || '-'}</td>
+                                                <td className="px-2 py-3 text-right">
+                                                    {row.status ? (
+                                                        <span className="bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded text-[10px] font-bold border border-red-500/20">{row.status}</span>
+                                                    ) : (
+                                                        <span className="text-[10px] text-slate-600 font-bold">正常</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
                      </div>
                  ) : (
-                     <div className="text-center text-red-400 py-4">讀取失敗</div>
+                     <div className="flex-1 flex items-center justify-center text-red-400">讀取失敗，請稍後再試</div>
                  )}
              </div>
         </div>
