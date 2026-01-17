@@ -313,19 +313,29 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
             {mainTab === 'admin' && (
                 <div className="w-full md:max-w-2xl mx-auto bg-[#FF9800]/10 rounded-2xl p-6 border border-[#FF9800]/20 relative overflow-hidden shadow-md shadow-black/20">
                     <div className="flex justify-center mb-4 relative z-10">
-                        <label className="text-[#FF9800] text-xs font-bold uppercase tracking-widest flex items-center gap-2 bg-[#FF9800]/10 px-3 py-1 rounded-full border border-[#FF9800]/20 cursor-pointer hover:bg-[#FF9800]/20 transition">
-                            <AlertTriangle size={14} /> 
-                            <span>異常警示 ({statsDate})</span>
-                            <Edit2 size={12} className="opacity-50" />
-                            {/* 隱藏的日期輸入框 */}
+                        {/* 使用 relative Group 讓 input 可以覆蓋整個按鈕 */}
+                        <div className="relative group cursor-pointer">
+                            <div className="text-[#FF9800] text-xs font-bold uppercase tracking-widest flex items-center gap-2 bg-[#FF9800]/10 px-3 py-1 rounded-full border border-[#FF9800]/20 group-hover:bg-[#FF9800]/20 transition">
+                                <AlertTriangle size={14} /> 
+                                {/* 顯示日期與星期 */}
+                                <span>
+                                  異常警示 ({statsDate}) 
+                                  <span className="ml-1 opacity-70">
+                                    {new Date(statsDate).toLocaleDateString('zh-TW', { weekday: 'short' })}
+                                  </span>
+                                </span>
+                                <Edit2 size={12} className="opacity-50" />
+                            </div>
+                            {/* Input 設為絕對定位，覆蓋整個父層 div，確保點擊必中 */}
                             <input 
                                 type="date" 
-                                className="absolute opacity-0 inset-0 cursor-pointer w-full h-full" 
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                                 value={statsDate}
                                 onChange={(e) => setStatsDate(e.target.value)}
                             />
-                        </label>
+                        </div>
                     </div>
+                    
                     <div className="flex items-center justify-around w-full relative z-10">
                         <button onClick={() => setStatModal({title: `遲到名單 (${statsDate})`, list: getDailyStats.late})} className="flex-1 flex flex-col items-center justify-center active:opacity-70 transition group">
                             <span className="text-4xl font-black text-[#FF9800] mb-1 group-hover:scale-110 transition-transform drop-shadow-sm">{getDailyStats.late.length}</span>
@@ -478,21 +488,38 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                        <h3 className="font-bold text-slate-300">近期打卡紀錄</h3>
                    </div>
                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                       {recordList.map((row: any[], i: number) => (
-                           <div key={i} className="bg-[#1e293b] p-4 rounded-2xl shadow-sm border border-slate-700 flex justify-between items-center">
-                               <div>
-                                  <div className="flex items-center gap-2 mb-1">
+                       {recordList.map((row: any[], i: number) => {
+                           const isSuccess = row[6]?.includes('成功');
+                           // 判斷方式 (GPS/IP) 通常在備註欄位 row[8]
+                           const method = row[8]?.includes('GPS') && row[8]?.includes('IP') ? 'GPS+IP' : (row[8]?.includes('GPS') ? 'GPS' : (row[8]?.includes('IP') ? 'IP' : '未知'));
+                           
+                           return (
+                           <div key={i} className="bg-[#1e293b] p-4 rounded-2xl shadow-sm border border-slate-700 flex flex-col gap-2">
+                               <div className="flex justify-between items-start">
+                                  <div className="flex items-center gap-2">
                                      <span className="font-bold text-slate-200 text-lg">{row[3]}</span>
                                      <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${row[4] === '上班' ? 'bg-[#00bda4]/10 text-[#00bda4] border-[#00bda4]/20' : 'bg-[#FF9800]/10 text-[#FF9800] border-[#FF9800]/20'}`}>{row[4]}</span>
                                   </div>
-                                  <p className="text-xs text-slate-500 font-mono">{row[1]} {row[2]}</p>
+                                  {/* 成功/失敗 狀態顯示 */}
+                                  <div className={`text-xs font-bold px-2 py-1 rounded flex items-center gap-1 ${isSuccess ? 'bg-slate-800 text-green-400' : 'bg-red-900/20 text-red-400'}`}>
+                                      {isSuccess ? (
+                                          <>{method} 打卡成功</>
+                                      ) : (
+                                          <>{row[6] || '失敗'}</> // 失敗原因
+                                      )}
+                                  </div>
                                </div>
-                               <div className="text-right">
-                                  <p className={`text-sm font-bold ${row[6]?.includes('成功') ? 'text-slate-400' : 'text-red-400'}`}>{row[6]?.includes('成功') ? '成功' : '失敗'}</p>
-                                  <p className="text-[10px] text-slate-600 truncate max-w-[100px]">{row[5]}</p>
+                               
+                               <div className="flex justify-between items-end border-t border-slate-700/50 pt-2">
+                                  <p className="text-xs text-slate-400 font-mono">{row[1]} <span className="text-white font-bold text-sm ml-1">{row[2]}</span></p>
+                                  {/* 地點放大顯示 */}
+                                  <div className="flex items-center gap-1 max-w-[60%] justify-end">
+                                      <MapPin size={12} className="text-slate-500 shrink-0"/>
+                                      <p className="text-xs text-slate-300 font-bold truncate">{row[5]}</p>
+                                  </div>
                                </div>
                            </div>
-                       ))}
+                       )})}
                    </div>
                </div>
             )}
@@ -642,14 +669,44 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                         {/* 本月 */}
                         <div>
                            <h4 className="text-[#00bda4] font-bold text-sm mb-2 sticky top-0 bg-[#1e293b] py-1">本月紀錄</h4>
-                           {historyModalData.current.length === 0 ? <p className="text-xs text-slate-500">無資料</p> : (
+
+                           {/* 列表標題列 */}
+                           <div className="grid grid-cols-[1.5fr_1fr_1fr_1fr] gap-2 px-2 mb-2 text-[10px] text-slate-500 font-bold">
+                               <div>日期</div>
+                               <div className="text-center">上班</div>
+                               <div className="text-center">下班</div>
+                               <div className="text-right">狀態</div>
+                           </div>
+
+                           {historyModalData.current.length === 0 ? <p className="text-xs text-slate-500 text-center py-4">無資料</p> : (
                                <div className="space-y-2">
                                   {historyModalData.current.map((row: any, i: number) => (
-                                      <div key={i} className="flex justify-between text-xs bg-[#334155] p-2 rounded border border-slate-700">
-                                          <span className="text-slate-300 w-16">{row.date}</span>
-                                          <span className="text-blue-300 w-12">{row.in || '-'}</span>
-                                          <span className="text-orange-300 w-12">{row.out || '-'}</span>
-                                          <span className="text-slate-400 truncate flex-1 text-right">{row.note}</span>
+                                      <div key={i} className="grid grid-cols-[1.5fr_1fr_1fr_1fr] gap-2 text-xs bg-[#334155] p-3 rounded-xl border border-slate-700 items-center">
+                                          {/* 日期 */}
+                                          <span className="text-slate-300 font-mono font-bold">
+                                            {row.date.replace(/^\d{4}\//, '')} {/* 只顯示 月/日 */}
+                                          </span>
+                                          
+                                          {/* 上班時間 */}
+                                          <span className={`text-center font-bold ${row.in ? 'text-blue-300' : 'text-slate-600'}`}>
+                                            {row.in || '-'}
+                                          </span>
+                                          
+                                          {/* 下班時間 */}
+                                          <span className={`text-center font-bold ${row.out ? 'text-orange-300' : 'text-slate-600'}`}>
+                                            {row.out || '-'}
+                                          </span>
+                                          
+                                          {/* 狀態 (遲到/早退) */}
+                                          <div className="text-right">
+                                            {row.status ? (
+                                                <span className="bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                                                    {row.status}
+                                                </span>
+                                            ) : (
+                                                <span className="text-slate-600 text-[10px]">正常</span>
+                                            )}
+                                          </div>
                                       </div>
                                   ))}
                                </div>
@@ -659,14 +716,35 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                         {/* 上月 */}
                         <div>
                            <h4 className="text-slate-400 font-bold text-sm mb-2 sticky top-0 bg-[#1e293b] py-1">上月 ({historyModalData.lastMonthName})</h4>
-                           {historyModalData.last.length === 0 ? <p className="text-xs text-slate-500">無資料</p> : (
+                           {historyModalData.last.current.length === 0 ? <p className="text-xs text-slate-500 text-center py-4">無資料</p> : (
                                <div className="space-y-2">
-                                  {historyModalData.last.map((row: any, i: number) => (
-                                      <div key={i} className="flex justify-between text-xs bg-[#334155]/50 p-2 rounded border border-slate-700/50">
-                                          <span className="text-slate-400 w-16">{row.date}</span>
-                                          <span className="text-blue-300/70 w-12">{row.in || '-'}</span>
-                                          <span className="text-orange-300/70 w-12">{row.out || '-'}</span>
-                                          <span className="text-slate-500 truncate flex-1 text-right">{row.note}</span>
+                                  {historyModalData.last.current.map((row: any, i: number) => (
+                                      <div key={i} className="grid grid-cols-[1.5fr_1fr_1fr_1fr] gap-2 text-xs bg-[#334155] p-3 rounded-xl border border-slate-700 items-center">
+                                          {/* 日期 */}
+                                          <span className="text-slate-300 font-mono font-bold">
+                                            {row.date.replace(/^\d{4}\//, '')} {/* 只顯示 月/日 */}
+                                          </span>
+                                          
+                                          {/* 上班時間 */}
+                                          <span className={`text-center font-bold ${row.in ? 'text-blue-300' : 'text-slate-600'}`}>
+                                            {row.in || '-'}
+                                          </span>
+                                          
+                                          {/* 下班時間 */}
+                                          <span className={`text-center font-bold ${row.out ? 'text-orange-300' : 'text-slate-600'}`}>
+                                            {row.out || '-'}
+                                          </span>
+                                          
+                                          {/* 狀態 (遲到/早退) */}
+                                          <div className="text-right">
+                                            {row.status ? (
+                                                <span className="bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                                                    {row.status}
+                                                </span>
+                                            ) : (
+                                                <span className="text-slate-600 text-[10px]">正常</span>
+                                            )}
+                                          </div>
                                       </div>
                                   ))}
                                </div>
