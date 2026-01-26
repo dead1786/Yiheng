@@ -65,7 +65,9 @@ const App: React.FC = () => {
         if (parsed && parsed.name) {
           const loginTime = parsed.loginTime || 0;
           const now = new Date().getTime();
-          if (now - loginTime > SESSION_DURATION) {
+          
+          // [修改] 增加檢查：如果沒有 UID (舊資料) 或 Session 過期，都強制清除
+          if (!parsed.uid || (now - loginTime > SESSION_DURATION)) {
             localStorage.removeItem('yh_app_session');
             setUser(null);
           } else {

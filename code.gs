@@ -47,11 +47,8 @@ function doPost(e) {
   if (action === "verifyReset") return responseJSON(handleVerifyReset(postData.name, postData.code, postData.newPassword));
   
   if (action === "clockIn") return responseJSON(handleClockIn(postData));
-  if (action === "getHistory") return responseJSON(handleGetHistory(postData.name, postData.loginTime));
-  
-  // [新增] 背景檢查狀態路由
-  if (action === "checkStatus") return responseJSON(handleCheckStatus(postData.name, postData.loginTime));
-
+  if (action === "getHistory") return responseJSON(handleGetHistory(postData.uid, postData.loginTime));
+  if (action === "checkStatus") return responseJSON(handleCheckStatus(postData.uid, postData.loginTime));
   if (action === "getLocations") return responseJSON(getLocations());
   
   // --- 管理員後台功能 ---
@@ -86,20 +83,21 @@ function updateLastActive(name) {
 // 2. 核心邏輯區 (Logic)
 // ==========================================
 
-// [修改] 強化版狀態檢查
-function handleCheckStatus(name, loginTime) {
+// [修改] 強化版狀態檢查 (改用 UID)
+function handleCheckStatus(uid, loginTime) {
   // 1. 先檢查是否被踢 (優先級最高)
-  if (!checkSessionValid(name, loginTime)) {
+  if (!checkSessionValid(uid, loginTime)) {
     return { success: false, status: 'force_logout', message: "管理者已強制登出您的帳號。" };
   }
 
-  // 2. 檢查是否需要重設密碼 (新增)
+  // 2. 檢查是否需要重設密碼
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_STAFF);
   const data = sheet.getDataRange().getValues();
   
+  // [修改] 改為比對 UID (第 15 欄, Index 14)
   for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === name) {
+    if (String(data[i][14]) === String(uid)) {
       // 檢查第 4 欄 (Index 3) "需重設"
       const status = data[i][3];
       if (status === true || status === "TRUE") {
@@ -112,17 +110,19 @@ function handleCheckStatus(name, loginTime) {
   return { success: true, status: 'ok' };
 }
 
-function checkSessionValid(name, clientLoginTime) {
+// [修改] 改用 UID 檢查 session
+function checkSessionValid(uid, clientLoginTime) {
   if (!clientLoginTime) return true;
   
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_STAFF);
   const data = sheet.getDataRange().getValues();
   
+  // [修改] 改為比對 UID (第 15 欄, Index 14)
   for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === name) {
+    if (String(data[i][14]) === String(uid)) {
       // 讀取第 13 欄 (Index 12) - 強制登出時間
-      const forceLogoutVal = data[i][12]; 
+      const forceLogoutVal = data[i][12];
       if (forceLogoutVal) {
         const kickTime = new Date(forceLogoutVal).getTime();
         if (kickTime > clientLoginTime) {
@@ -419,7 +419,8 @@ function handleLogin(name, password, deviceId) {
 }
 
 function handleClockIn(data) {
-  if (data.loginTime && !checkSessionValid(data.name, data.loginTime)) {
+  // [修改] 傳入 uid 給 checkSessionValid
+  if (data.loginTime && !checkSessionValid(data.uid, data.loginTime)) {
     return { success: false, status: 'force_logout', message: "管理者已強制登出您的帳號，請重新登入。" };
   }
 
@@ -427,8 +428,8 @@ function handleClockIn(data) {
   const sheet = ss.getSheetByName(SHEET_RECORDS);
   const locSheet = ss.getSheetByName(SHEET_LOCATIONS);
   const staffSheet = ss.getSheetByName(SHEET_STAFF);
-  
-  if (!data.force && checkTooFrequent(data.name, sheet)) {
+  // [修改] 改傳 uid 給 checkTooFrequent
+  if (!data.force && checkTooFrequent(data.uid, sheet)) {
     return { success: false, status: 'warning_duplicate', message: "⚠️ 系統偵測您 1 小時內已經打過卡。\n\n您確定要重複打卡嗎？" };
   }
   updateLastActive(data.name);
@@ -520,10 +521,15 @@ function handleClockIn(data) {
 }
 
 // [修改] 員工查詢歷史紀錄 (改為讀取矩陣式報表)
-function handleGetHistory(name, loginTime) {
-  if (loginTime && !checkSessionValid(name, loginTime)) {
+function handleGetHistory(uid, loginTime) {
+  // [修改] 檢查 Session 改用 UID
+  if (loginTime && !checkSessionValid(uid, loginTime)) {
      return { success: false, status: 'force_logout', message: "管理者已強制登出您的帳號，請重新登入。" };
   }
+
+  // [新增] 用 UID 反查姓名 (因為矩陣表還是認名字)
+  const name = getNameByUid(uid);
+  if (!name) return { success: false, message: "找不到使用者資料" };
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const mainSheet = ss.getSheetByName("打卡紀錄整理");
@@ -552,7 +558,8 @@ function handleGetHistory(name, loginTime) {
   const lastMonthSheetName = `${lastYear}/${lastMonth}`;
   
   const cleanName = String(name).trim();
-  const lastRawRec = getLastRawClockIn(cleanName);
+  // [修改] 改傳 UID
+  const lastRawRec = getLastRawClockIn(uid);
   
   return { 
     success: true, 
@@ -567,23 +574,33 @@ function handleGetHistory(name, loginTime) {
   };
 }
 
-function getLastRawClockIn(name) {
+function getNameByUid(uid) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_STAFF);
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][14]) === String(uid)) {
+      return data[i][0]; // 回傳姓名
+    }
+  }
+  return null;
+}
+
+function getLastRawClockIn(uid) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_RECORDS);
   if (!sheet) return null;
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return null;
-  
   const startRow = Math.max(2, lastRow - 100);
-  const data = sheet.getRange(startRow, 1, lastRow - startRow + 1, 7).getDisplayValues();
+  // [修改] 擴大範圍到 17 (Q欄)
+  const data = sheet.getRange(startRow, 1, lastRow - startRow + 1, 17).getDisplayValues();
   
-  const cleanName = String(name).trim();
-
   for (let i = data.length - 1; i >= 0; i--) {
     const row = data[i];
-    // [關鍵] 這裡也要 trim()，否則會抓不到
-    if (String(row[3]).trim() === cleanName && row[6].includes("成功")) { 
-        return `${row[1]} ${row[2]} (${row[4]})`; 
+    // [修改] 比對 Q 欄 (Index 16)
+    if (String(row[16]) === String(uid) && row[6].includes("成功")) { 
+        return `${row[1]} ${row[2]} (${row[4]})`;
     }
   }
   return null;
@@ -648,8 +665,12 @@ function handleAdminGetData(data) {
       if(staffSheet) {
           const sData = staffSheet.getDataRange().getDisplayValues();
           for(let i=1; i<sData.length; i++) {
-              // 姓名在 Index 0, 分區在 Index 13 (N欄)
-              staffRegionMap[sData[i][0]] = sData[i][13] || "";
+              // 姓名在 Index 0, 分區在 Index 13 (N欄), UID 在 Index 14 (O欄)
+              const rName = sData[i][0];
+              const rUid = sData[i][14];
+              const region = sData[i][13] || "";
+              staffRegionMap[rName] = region; // 為了 Log 還是保留 Name Key
+              if (rUid) staffRegionMap[rUid] = region; // [新增] UID Key
           }
       }
   }
@@ -685,12 +706,19 @@ function handleAdminGetData(data) {
     // 如果有分區限制，過濾紀錄
     if (allowedRegions.length > 0) {
         targetData = targetData.filter(row => {
-            const name = data.dataType === 'record' ? row[3] : row[1]; // Log: row[1] 為操作者或對象
-            // 若該名字不在員工名單或是其分區不符，則過濾掉
-            // (Log 可能紀錄管理員操作，這裡主要過濾員工打卡紀錄)
-            if (!staffRegionMap[name] && data.dataType === 'record') return false; 
-            if (staffRegionMap[name]) return isRegionAllowed(staffRegionMap[name]);
-            return true; // 如果是純管理員操作紀錄，保留
+            let key = "";
+            if (data.dataType === 'record') {
+                 // [修改] 打卡紀錄優先用 UID (Index 16), 沒有則用 Name (Index 3)
+                 key = row[16] || row[3];
+            } else {
+                 key = row[1]; // Log 只有名字 (Index 1)
+            }
+            
+            // 若該 Key 不在員工名單或是其分區不符，則過濾掉
+            if (!staffRegionMap[key] && data.dataType === 'record') return false; 
+   
+            if (staffRegionMap[key]) return isRegionAllowed(staffRegionMap[key]);
+            return true; // 如果是 Log 或找不到人(可能已刪除)，暫時保留
         });
     }
 
@@ -982,18 +1010,23 @@ function handleAdminUpdateSupervisor(data) {
   let sheet = ss.getSheetByName(SHEET_SUPERVISORS);
   if (!sheet) {
       sheet = ss.insertSheet(SHEET_SUPERVISORS);
-      sheet.appendRow(["姓名", "部門", "職稱"]);
+      sheet.appendRow(["姓名", "部門", "職稱", "分區", "UID"]); // [修改] 標題補上 UID
   }
   
   const rows = sheet.getDataRange().getValues();
   const targetName = String(data.name).trim();
+  const targetUid = data.uid ? String(data.uid) : ""; // [新增] 接收 UID
   const adminName = data.adminName || "管理員";
-
-  // 1. 先尋找是否已在名單中
+  
+  // 1. 先尋找是否已在名單中 (優先找 UID，其次找 Name)
   let rowIndex = -1;
   for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][0]).trim() === targetName) {
-      rowIndex = i + 1; // 轉為實際列號 (1-based)
+    const rowUid = rows[i][4] ? String(rows[i][4]) : ""; // Index 4 = Column E
+    const rowName = String(rows[i][0]).trim();
+    
+    // 如果 UID 吻合，或是 UID 為空但名字吻合 (兼容舊資料)
+    if ((targetUid && rowUid === targetUid) || (!rowUid && rowName === targetName)) {
+      rowIndex = i + 1;
       break;
     }
   }
@@ -1012,12 +1045,19 @@ function handleAdminUpdateSupervisor(data) {
     const title = data.title || "";
     
     if (rowIndex !== -1) {
-      // 更新
+      // 更新 (部門, 職稱) 且 [新增] 若原本沒 UID 則補上 (Column E / Index 4)
+      // sheet.getRange(row, col) -> Update B, C (Col 2, 3)
       sheet.getRange(rowIndex, 2, 1, 2).setValues([[dept, title]]);
+      
+      // 補寫 UID 到第 5 欄 (如果有的話)
+      if (targetUid) {
+         sheet.getRange(rowIndex, 5).setValue(targetUid);
+      }
+      
       logAdminAction(adminName, "更新主管", `更新 ${targetName} 資料：${dept} / ${title}`);
     } else {
-      // 新增
-      sheet.appendRow([targetName, dept, title]);
+      // 新增 (保留 D 欄分區為空，將 UID 寫入 E 欄)
+      sheet.appendRow([targetName, dept, title, "", targetUid]);
       logAdminAction(adminName, "新增主管", `將 ${targetName} 設為主管：${dept} / ${title}`);
     }
     return { success: true };
@@ -1081,14 +1121,16 @@ function logAdminAction(admin, action, details) {
     logSheet.appendRow([new Date(), admin, action, details]);
 }
 
-function checkTooFrequent(name, recordSheet) { 
+function checkTooFrequent(uid, recordSheet) { 
     const lastRow = recordSheet.getLastRow();
     if (lastRow < 2) return false;
     const startRow = Math.max(2, lastRow - 20);
-    const data = recordSheet.getRange(startRow, 1, lastRow - startRow + 1, 4).getValues();
+    // [修改] 範圍擴大到 Q 欄 (17欄)，以讀取 UID
+    const data = recordSheet.getRange(startRow, 1, lastRow - startRow + 1, 17).getValues();
     const now = new Date().getTime();
     for (let i = data.length - 1; i >= 0; i--) { 
-        if (data[i][3] === name) { 
+        // [修改] 比對 Q 欄 (Index 16) 的 UID
+        if (String(data[i][16]) === String(uid)) { 
             const lastTime = new Date(data[i][0]).getTime();
             if ((now - lastTime) / 1000 / 60 < 60) return true; 
             return false;
@@ -1344,8 +1386,8 @@ function handleAdminGetDailyRecords(dateStr) {
 
   // 為了效能，我們只抓取最後 1500 筆資料來搜尋 (假設單日不會超過這個量)
   const startRow = Math.max(2, lastRow - 1500);
-  const data = sheet.getRange(startRow, 1, lastRow - startRow + 1, 9).getDisplayValues();
-
+  // [修改] 擴大範圍到 17 (Q欄)
+  const data = sheet.getRange(startRow, 1, lastRow - startRow + 1, 17).getDisplayValues();
   // 將 input 的 YYYY-MM-DD 轉為 Sheet 的 YYYY/MM/DD
   const targetDate = dateStr.replace(/-/g, '/');
 
@@ -1355,8 +1397,12 @@ function handleAdminGetDailyRecords(dateStr) {
   return { success: true, list: filtered };
 }
 
-// [修改] 管理員查詢特定員工歷史 (同步矩陣邏輯)
-function handleAdminGetStaffHistory(targetName) {
+// [修改] 管理員查詢特定員工歷史 (接收 UID -> 反查 Name -> 讀取矩陣)
+function handleAdminGetStaffHistory(targetUid) {
+  // [新增] 透過 UID 找名字
+  const targetName = getNameByUid(targetUid);
+  if (!targetName) return { success: false, message: "找不到該員工" };
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const mainSheet = ss.getSheetByName("打卡紀錄整理");
 
@@ -1382,7 +1428,6 @@ function handleAdminGetStaffHistory(targetName) {
   }
   const lastMonthSheetName = `${lastYear}/${lastMonth}`;
   const cleanName = String(targetName).trim();
-
   return { 
     success: true, 
     data: { 
