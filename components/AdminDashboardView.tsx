@@ -4,7 +4,7 @@ import {
   ShieldCheck, Search, Bell, Users, MapPin, Share, Activity, AlertTriangle, 
   Filter, Link, UserMinus, Lock, Unlock, Home, History, User, Settings,
   Download, FileSpreadsheet, Loader2, Unlink, Trash2, Plus, Edit2, X, Save,
-  Clock, MessageSquare, FileText, ChevronRight, AlertCircle, Menu, LogOut, LayoutDashboard, Calendar
+  Clock, MessageSquare, FileText, ChevronRight, AlertCircle, Menu, LogOut, LayoutDashboard, Calendar,Crown
 } from 'lucide-react';
 
 interface Props {
@@ -25,7 +25,7 @@ const LoadingOverlay = ({text = "處理中..."}: {text?: string}) => (
 
 // 定義 Tab 類型
 type MainTab = 'admin' | 'history' | 'others';
-type SubTab = 'staff' | 'location' | 'shift' | 'export' | 'line' | 'log';
+type SubTab = 'staff' | 'location' | 'shift' | 'export' | 'line' | 'log' | 'supervisor'; 
 
 export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Props) => {
   // Navigation State
@@ -50,6 +50,9 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
   const [newLoc, setNewLoc] = useState({ name: '', lat: '', lng: '', radius: '500', ip: '' });
   const [newShift, setNewShift] = useState({ name: '', start: '09:00', end: '18:00' });
   const [exportSheet, setExportSheet] = useState('');
+  
+  // [新增] 主管設置相關 State (用來暫存編輯中的資料)
+  const [supEdits, setSupEdits] = useState<{[key:string]: {dept: string, title: string}}>({});
   const [sheetList, setSheetList] = useState<{name:string, label:string}[]>([]);
 
   // Modals for Stats & History
@@ -301,7 +304,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
              {/* Pills Container */}
              {mainTab === 'admin' && (
                 <div className="flex gap-3 overflow-x-auto no-scrollbar">
-                    {[['staff', '員工', Users], ['location', '地點', MapPin], ['shift', '班別', Clock], ['export', '匯出', Share]].map(([key, label, Icon]: any) => (
+                    {[['staff', '員工', Users], ['supervisor', '主管設置', Crown], ['location', '地點', MapPin], ['shift', '班別', Clock], ['export', '匯出', Share]].map(([key, label, Icon]: any) => (
                         <button key={key} onClick={() => setSubTab(key)} className={`flex h-10 shrink-0 items-center justify-center gap-x-2 rounded-full px-5 transition-all whitespace-nowrap ${subTab === key ? 'bg-[#00bda4] text-white shadow-lg shadow-[#00bda4]/20' : 'bg-[#1e293b] text-slate-400 border border-slate-700 hover:bg-slate-700'}`}>
                            <Icon size={16} /> <span className="text-sm font-bold">{label}</span>
                         </button>
@@ -522,6 +525,138 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                         <Download size={20} /> 確認下載
                      </button>
                  </div>
+            )}
+
+            {mainTab === 'admin' && subTab === 'supervisor' && (
+                <div className="w-full max-w-3xl mx-auto space-y-4">
+                    <div className="bg-[#1e293b] p-6 rounded-2xl shadow-md border border-slate-700 mb-6">
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2 mb-2">
+                           <Crown className="text-[#ff9f28]" /> 主管權限設置
+                        </h3>
+                        <p className="text-slate-400 text-sm">
+                           在此設定員工的主管身分。開啟權限後，該員工將獲得進階管理功能 (如：打卡頁進入後台、查看所有數據)。
+                           <br/>被設定為主管的人員，系統會記錄其部門與職稱。
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3">
+                        {(() => {
+                            const staff = allData.staff?.list || [];
+                            const supervisors = allData.supervisor?.list || [];
+                            const supMap = new Map();
+                            supervisors.forEach((s: any[]) => supMap.set(s[0], { dept: s[1], title: s[2] }));
+
+                            // 合併並排序 (主管在最上面)
+                            const mergedList = staff.map((s: any[]) => {
+                                const name = s[0];
+                                const isSup = supMap.has(name);
+                                const info = supMap.get(name) || { dept: '', title: '' };
+                                return { name, isSup, ...info };
+                            }).sort((a: any, b: any) => (b.isSup ? 1 : 0) - (a.isSup ? 1 : 0));
+
+                            return mergedList.map((item: any, idx: number) => {
+                                // 判斷是否正在編輯 (有輸入值) 或顯示原值
+                                const currentEdit = supEdits[item.name] || { dept: item.dept, title: item.title };
+                                // 是否有變更 (用於顯示儲存按鈕狀態)
+                                const hasChanged = currentEdit.dept !== item.dept || currentEdit.title !== item.title;
+
+                                const handleToggle = async () => {
+                                    const newStatus = !item.isSup;
+                                    const action = newStatus ? "設為主管" : "移除主管";
+                                    // 若是移除，直接送出；若是新增，先不送出，等待填寫資料 (邏輯上 Toggle 直接生效比較直覺，這裡簡化為：移除直接生效，新增則開啟輸入框，需按儲存才算完成資料填寫，但後端需要先標記)
+                                    // 修正策略：Toggle 直接呼叫 API 變更狀態。若是開啟，預設帶入空值。
+                                    
+                                    if (!newStatus) {
+                                        onConfirm(`確定移除 [${item.name}] 的主管權限？`, async () => {
+                                            setBlockText("更新權限中..."); setIsBlocking(true);
+                                            await api.adminUpdateSupervisor({ name: item.name, isSupervisor: false, adminName });
+                                            await fetchAllData(false);
+                                            setIsBlocking(false);
+                                        });
+                                    } else {
+                                        // 開啟權限 (預設空值)
+                                        setBlockText("啟用中..."); setIsBlocking(true);
+                                        await api.adminUpdateSupervisor({ name: item.name, isSupervisor: true, dept: "", title: "", adminName });
+                                        await fetchAllData(false);
+                                        setIsBlocking(false);
+                                    }
+                                };
+
+                                const handleSaveInfo = async () => {
+                                    setBlockText("儲存資料中..."); setIsBlocking(true);
+                                    await api.adminUpdateSupervisor({ 
+                                        name: item.name, 
+                                        isSupervisor: true, 
+                                        dept: currentEdit.dept, 
+                                        title: currentEdit.title, 
+                                        adminName 
+                                    });
+                                    // 清除該人的編輯暫存
+                                    const newEdits = {...supEdits};
+                                    delete newEdits[item.name];
+                                    setSupEdits(newEdits);
+                                    
+                                    await fetchAllData(false);
+                                    setIsBlocking(false);
+                                    onAlert("資料已更新");
+                                };
+
+                                const handleEditChange = (field: 'dept' | 'title', val: string) => {
+                                    setSupEdits(prev => ({
+                                        ...prev,
+                                        [item.name]: { ...currentEdit, [field]: val }
+                                    }));
+                                };
+
+                                return (
+                                    <div key={idx} className={`p-4 rounded-xl border transition-all ${item.isSup ? 'bg-[#1e293b] border-[#ff9f28]/30 shadow-lg shadow-[#ff9f28]/5' : 'bg-[#1e293b] border-slate-700 opacity-80 hover:opacity-100'}`}>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-2 rounded-full ${item.isSup ? 'bg-[#ff9f28]/10 text-[#ff9f28]' : 'bg-slate-700 text-slate-400'}`}>
+                                                    {item.isSup ? <Crown size={20} fill="currentColor" /> : <User size={20} />}
+                                                </div>
+                                                <div>
+                                                    <p className={`font-bold text-lg ${item.isSup ? 'text-white' : 'text-slate-400'}`}>{item.name}</p>
+                                                    {item.isSup && <p className="text-xs text-[#ff9f28] font-bold">{item.dept} {item.title && ` - ${item.title}`}</p>}
+                                                </div>
+                                            </div>
+                                            
+                                            {/* Toggle Switch */}
+                                            <button onClick={handleToggle} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${item.isSup ? 'bg-[#ff9f28]' : 'bg-slate-600'}`}>
+                                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${item.isSup ? 'translate-x-6' : 'translate-x-1'}`} />
+                                            </button>
+                                        </div>
+
+                                        {/* Expandable Edit Area */}
+                                        {item.isSup && (
+                                            <div className="mt-3 pt-3 border-t border-slate-700/50 flex gap-2 items-center animate-in slide-in-from-top-2">
+                                                <input 
+                                                    placeholder="部門" 
+                                                    value={currentEdit.dept} 
+                                                    onChange={e => handleEditChange('dept', e.target.value)}
+                                                    className="flex-1 bg-[#0f172a] text-white text-sm p-2 rounded-lg border border-slate-700 outline-none focus:border-[#ff9f28]" 
+                                                />
+                                                <input 
+                                                    placeholder="職稱" 
+                                                    value={currentEdit.title} 
+                                                    onChange={e => handleEditChange('title', e.target.value)}
+                                                    className="flex-1 bg-[#0f172a] text-white text-sm p-2 rounded-lg border border-slate-700 outline-none focus:border-[#ff9f28]" 
+                                                />
+                                                <button 
+                                                    onClick={handleSaveInfo}
+                                                    disabled={!hasChanged}
+                                                    className={`p-2 rounded-lg font-bold text-xs transition-all ${hasChanged ? 'bg-[#ff9f28] text-white shadow-md' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}
+                                                >
+                                                    <Save size={18} />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        })()}
+                    </div>
+                </div>
             )}
 
             {/* HISTORY */}

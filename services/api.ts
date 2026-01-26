@@ -21,7 +21,6 @@ export const api = {
   
   updatePassword: (name: string, oldPassword: string, newPassword: string) => post("updatePassword", { name, oldPassword, newPassword }),
 
-  // [新增] 忘記密碼 API
   requestReset: (name: string) => post("requestReset", { name }),
   checkResetCode: (name: string, code: string) => post("checkResetCode", { name, code }),
   verifyReset: (name: string, code: string, newPassword: string) => post("verifyReset", { name, code, newPassword }),
@@ -37,14 +36,14 @@ export const api = {
   
   adminUpdateLocation: (data: any) => post("adminUpdateLocation", data),
   adminUpdateStaff: (data: any) => post("adminUpdateStaff", data), 
-  
-  // [新增] 班別設定
+
   adminUpdateShift: (data: any) => post("adminUpdateShift", data),
 
-  // [新增] 查詢功能
   adminGetDailyRecords: (date: string) => post("adminGetDailyRecords", { date }),
   adminGetStaffHistory: (targetName: string) => post("adminGetStaffHistory", { targetName }),
-  
+
+  adminUpdateSupervisor: (data: any) => post("adminUpdateSupervisor", data),
+
   adminUnlockStaff: (targetName: string, adminName: string) => post("adminUnlockStaff", { targetName, adminName }),
 
   adminDownloadExcel: (adminName: string, sheetName?: string) => post("adminDownloadExcel", { adminName, sheetName }),
