@@ -58,8 +58,8 @@ function doPost(e) {
   if (action === "adminGetData") return responseJSON(handleAdminGetData(postData));
   if (action === "adminUpdateLocation") return responseJSON(handleAdminUpdateLocation(postData));
   if (action === "adminUpdateStaff") return responseJSON(handleAdminUpdateStaff(postData));
+  if (action === "adminUpdateSupervisor") return responseJSON(handleAdminUpdateSupervisor(postData)); 
   if (action === "adminUnlockStaff") return responseJSON(handleAdminUnlockStaff(postData));
-  // [新增] 查詢指定日期的紀錄 & 查詢員工歷史
   if (action === "adminGetDailyRecords") return responseJSON(handleAdminGetDailyRecords(postData.date));
   if (action === "adminGetStaffHistory") return responseJSON(handleAdminGetStaffHistory(postData.targetName));
   
@@ -538,7 +538,8 @@ function handleAdminGetData(data) {
         location: handleAdminGetData({ dataType: 'location' }),
         record: handleAdminGetData({ dataType: 'record' }),
         log: handleAdminGetData({ dataType: 'log' }),
-        shift: handleAdminGetData({ dataType: 'shift' })
+        shift: handleAdminGetData({ dataType: 'shift' }),
+        supervisor: handleAdminGetData({ dataType: 'supervisor' }) // [新增]
       }
     };
   }
@@ -551,6 +552,7 @@ function handleAdminGetData(data) {
   else if (data.dataType === 'record') sheetName = SHEET_RECORDS;
   else if (data.dataType === 'log') sheetName = SHEET_ADMIN_LOGS;
   else if (data.dataType === 'shift') sheetName = SHEET_SHIFTS;
+  else if (data.dataType === 'supervisor') sheetName = SHEET_SUPERVISORS; // [新增]
   
   const sheet = ss.getSheetByName(sheetName);
   if (!sheet) return { success: false, message: "找不到工作表" };
@@ -802,6 +804,53 @@ function handleChangePassword(name, newPwd) {
     return { success: false, message: "找不到該帳號" };
 }
 
+function handleAdminUpdateSupervisor(data) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_SUPERVISORS);
+  if (!sheet) {
+      sheet = ss.insertSheet(SHEET_SUPERVISORS);
+      sheet.appendRow(["姓名", "部門", "職稱"]);
+  }
+  
+  const rows = sheet.getDataRange().getValues();
+  const targetName = String(data.name).trim();
+  const adminName = data.adminName || "管理員";
+
+  // 1. 先尋找是否已在名單中
+  let rowIndex = -1;
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === targetName) {
+      rowIndex = i + 1; // 轉為實際列號 (1-based)
+      break;
+    }
+  }
+
+  // 2. 判斷操作：移除主管 vs 設定主管
+  if (data.isSupervisor === false) {
+    // 移除
+    if (rowIndex !== -1) {
+      sheet.deleteRow(rowIndex);
+      logAdminAction(adminName, "移除主管", `移除 ${targetName} 的主管權限`);
+    }
+    return { success: true };
+  } else {
+    // 設定 (新增或更新)
+    const dept = data.dept || "";
+    const title = data.title || "";
+    
+    if (rowIndex !== -1) {
+      // 更新
+      sheet.getRange(rowIndex, 2, 1, 2).setValues([[dept, title]]);
+      logAdminAction(adminName, "更新主管", `更新 ${targetName} 資料：${dept} / ${title}`);
+    } else {
+      // 新增
+      sheet.appendRow([targetName, dept, title]);
+      logAdminAction(adminName, "新增主管", `將 ${targetName} 設為主管：${dept} / ${title}`);
+    }
+    return { success: true };
+  }
+}
+
 function handleAdminUpdateLocation(data) { 
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOCATIONS);
     const rows = sheet.getDataRange().getValues();
@@ -957,6 +1006,7 @@ function setupSystem() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     if(!ss.getSheetByName(SHEET_STAFF)) ss.insertSheet(SHEET_STAFF).appendRow(["姓名", "密碼", "LINE_ID", "需重設密碼", "允許遠端", "失敗次數", "最後失敗", "鎖定直到", "鎖定倍率", "最後上線時間", "裝置ID", "班別", "強制登出時間"]); 
     if(!ss.getSheetByName(SHEET_ADMINS)) ss.insertSheet(SHEET_ADMINS).appendRow(["姓名", "密碼", "備註"]);
+    if(!ss.getSheetByName(SHEET_SUPERVISORS)) ss.insertSheet(SHEET_SUPERVISORS).appendRow(["姓名", "部門", "職稱"]); 
     if(!ss.getSheetByName(SHEET_LOCATIONS)) ss.insertSheet(SHEET_LOCATIONS).appendRow(["地點名稱", "緯度", "經度", "允許誤差範圍(m)", "允許IP"]); 
     if(!ss.getSheetByName(SHEET_RECORDS)) ss.insertSheet(SHEET_RECORDS).appendRow(["時間戳記", "日期", "時間", "姓名", "動作", "地點", "打卡結果", "GPS座標", "備註"]); 
     if(!ss.getSheetByName(SHEET_ADMIN_LOGS)) ss.insertSheet(SHEET_ADMIN_LOGS).appendRow(["時間", "管理員", "動作", "詳細內容"]);

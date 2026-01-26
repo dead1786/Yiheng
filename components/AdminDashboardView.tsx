@@ -11,7 +11,7 @@ interface Props {
   onBack: () => void;
   onAlert: (msg: string) => void;
   onConfirm: (msg: string, onYes: () => void) => void;
-  adminName: string;
+  user: any; // [修改] 接收完整 User 物件
 }
 
 const LoadingOverlay = ({text = "處理中..."}: {text?: string}) => (
@@ -27,7 +27,9 @@ const LoadingOverlay = ({text = "處理中..."}: {text?: string}) => (
 type MainTab = 'admin' | 'history' | 'others';
 type SubTab = 'staff' | 'location' | 'shift' | 'export' | 'line' | 'log' | 'supervisor'; 
 
-export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Props) => {
+export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) => {
+  const adminName = user.name; // 從 user 取得 name
+  const isSupervisorOnly = user.isSupervisor && !user.isAdmin; // 判斷是否為純主管
   // Navigation State
   const [mainTab, setMainTab] = useState<MainTab>('admin');
   const [subTab, setSubTab] = useState<SubTab>('staff');
@@ -304,7 +306,13 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
              {/* Pills Container */}
              {mainTab === 'admin' && (
                 <div className="flex gap-3 overflow-x-auto no-scrollbar">
-                    {[['staff', '員工', Users], ['supervisor', '主管設置', Crown], ['location', '地點', MapPin], ['shift', '班別', Clock], ['export', '匯出', Share]].map(([key, label, Icon]: any) => (
+                    {/* [修改] 根據權限過濾 Tab */}
+                    {[['staff', '員工', Users], ['supervisor', '主管設置', Crown], ['location', '地點', MapPin], ['shift', '班別', Clock], ['export', '匯出', Share]]
+                      .filter(([key]) => {
+                          if (isSupervisorOnly && key === 'supervisor') return false; // 主管看不到主管設置
+                          return true;
+                      })
+                      .map(([key, label, Icon]: any) => (
                         <button key={key} onClick={() => setSubTab(key)} className={`flex h-10 shrink-0 items-center justify-center gap-x-2 rounded-full px-5 transition-all whitespace-nowrap ${subTab === key ? 'bg-[#00bda4] text-white shadow-lg shadow-[#00bda4]/20' : 'bg-[#1e293b] text-slate-400 border border-slate-700 hover:bg-slate-700'}`}>
                            <Icon size={16} /> <span className="text-sm font-bold">{label}</span>
                         </button>
@@ -457,7 +465,10 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                                     <p className="font-extrabold text-slate-200 text-lg">{row[0]}</p>
                                     <p className="text-xs text-slate-500 font-bold mt-1 bg-slate-800 px-2 py-1 rounded w-fit">{row[1]} - {row[2]}</p>
                                 </div>
-                                <button onClick={() => handleDeleteShift(row[0])} className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20"><Trash2 size={18}/></button>
+                                {/* [修改] 主管不能刪除 */}
+                                {!isSupervisorOnly && (
+                                   <button onClick={() => handleDeleteShift(row[0])} className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20"><Trash2 size={18}/></button>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -498,12 +509,17 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                                     {row[4] && <p className="text-xs text-slate-500 mt-1">IP: {row[4]}</p>}
                                 </div>
                                 <div className="flex flex-col gap-2">
-                                     <button onClick={() => { setEditingLoc(row); setNewLoc({name: row[0], lat: row[1], lng: row[2], radius: row[3], ip: row[4] || ''}); window.scrollTo({top:0, behavior:'smooth'}); }} className="p-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500/20">
-                                         <Edit2 size={16}/>
-                                     </button>
-                                     <button onClick={() => handleDeleteLocation(row[0])} className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20">
-                                         <Trash2 size={16}/>
-                                     </button>
+                                     {/* [修改] 主管不能編輯刪除 */}
+                                     {!isSupervisorOnly && (
+                                       <>
+                                         <button onClick={() => { setEditingLoc(row); setNewLoc({name: row[0], lat: row[1], lng: row[2], radius: row[3], ip: row[4] || ''}); window.scrollTo({top:0, behavior:'smooth'}); }} className="p-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500/20">
+                                             <Edit2 size={16}/>
+                                         </button>
+                                         <button onClick={() => handleDeleteLocation(row[0])} className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20">
+                                             <Trash2 size={16}/>
+                                         </button>
+                                       </>
+                                     )}
                                 </div>
                             </div>
                         ))}
@@ -534,8 +550,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Pr
                            <Crown className="text-[#ff9f28]" /> 主管權限設置
                         </h3>
                         <p className="text-slate-400 text-sm">
-                           在此設定員工的主管身分。開啟權限後，該員工將獲得進階管理功能 (如：打卡頁進入後台、查看所有數據)。
-                           <br/>被設定為主管的人員，系統會記錄其部門與職稱。
+                           在此設定員工的主管身分。開啟權限後，該員工將豁免打卡GPS、裝置ID等限制。
                         </p>
                     </div>
 

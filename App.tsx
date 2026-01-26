@@ -32,8 +32,9 @@ interface User {
   needReset: boolean;
   allowRemote?: boolean;
   isAdmin?: boolean;
+  isSupervisor?: boolean; // [新增]
+  regions?: string[];     // [新增] 分區權限
   loginTime?: number;
-  // [新增] 班別資訊
   shift?: {
     name: string;
     start: string;
@@ -112,7 +113,8 @@ const App: React.FC = () => {
     const userWithTime = { ...userData, loginTime: new Date().getTime() };
     setUser(userWithTime);
     localStorage.setItem('yh_app_session', JSON.stringify(userWithTime));
-    if (userData.isAdmin) {
+    // [修改] 管理員或主管都預設開啟後台模式 (LoginView 會消失)
+    if (userData.isAdmin || userData.isSupervisor) {
       setShowAdmin(true);
     }
   };
@@ -137,7 +139,8 @@ const App: React.FC = () => {
     if (user.needReset) return <ChangePasswordView user={user} onPasswordChanged={handlePasswordChanged} onAlert={showAlert} />;
 
     // 3. 管理員後台
-    if (showAdmin && user) return <AdminDashboardView onBack={() => setShowAdmin(false)} onAlert={showAlert} onConfirm={showConfirm} adminName={user.name} />;
+    // [修改] 傳遞 user 物件以便後台判斷權限 (isSupervisor)
+    if (showAdmin && user) return <AdminDashboardView onBack={() => setShowAdmin(false)} onAlert={showAlert} onConfirm={showConfirm} user={user} />;
 
     // 4. 打卡首頁
     return <ClockInView user={user} onLogout={handleLogout} onAlert={showAlert} onConfirm={showConfirm} onEnterAdmin={() => setShowAdmin(true)} />;
