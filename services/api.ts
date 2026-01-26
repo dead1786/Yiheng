@@ -42,7 +42,8 @@ export const api = {
   adminUpdateShift: (data: any) => post("adminUpdateShift", data),
 
   adminGetDailyRecords: (date: string) => post("adminGetDailyRecords", { date }),
-  adminGetStaffHistory: (targetName: string) => post("adminGetStaffHistory", { targetName }),
+  // [修改] 改傳 targetUid
+  adminGetStaffHistory: (targetUid: string) => post("adminGetStaffHistory", { targetUid }),
 
   adminUpdateSupervisor: (data: any) => post("adminUpdateSupervisor", data),
 

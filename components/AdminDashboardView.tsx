@@ -111,13 +111,14 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
      }
   };
 
-  // [新增] 開啟員工歷史紀錄
-  const openStaffHistory = async (targetName: string) => {
-      setHistoryModalUser(targetName);
+  // [新增] 開啟員工歷史紀錄 (改收 UID)
+  const openStaffHistory = async (targetUid: string, targetName: string) => {
+      setHistoryModalUser(targetName); // 顯示用
       setHistoryLoading(true);
       setHistoryModalData(null);
       
-      const res = await api.adminGetStaffHistory(targetName);
+      // [修改] 傳遞 UID
+      const res = await api.adminGetStaffHistory(targetUid);
       setHistoryLoading(false);
       
       if (res.success) {
@@ -129,44 +130,71 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
   };
 
   // --- Logic Helpers ---
-  // [修改] 異常警示邏輯：改用 dailyRecords + 排除特定班別
+  // [修改] 異常警示邏輯：改用 UID 匹配班別
   const getDailyStats = useMemo(() => {
     // 如果還沒載入班別或員工資料，先回傳空
     if (!allData.staff || !allData.shift) return { late: [], early: [] };
     
-    // 使用從後端抓回來的 dailyRecords (特定日期)，而不是 allData.record (最近100筆)
+    // 使用從後端抓回來的 dailyRecords (特定日期)
     const recordsToAnalyze = dailyRecords;
     
     const staffShiftMap = new Map();
-    allData.staff.list.forEach((s: any[]) => staffShiftMap.set(s[0], s[7])); // index 7 is shift
+    // 建立 [UID] -> [班別] 的對照表
+    // 建立 [UID] -> [姓名] 的對照表 (顯示用)
+    const staffNameMap = new Map();
+    
+    allData.staff.list.forEach((s: any[]) => {
+        const name = s[0];
+        const shift = s[7];
+        const uid = s[9]; // UID 在 Index 9
+        if (uid) {
+            staffShiftMap.set(uid, shift);
+            staffNameMap.set(uid, name);
+        }
+    });
 
     const shiftTimeMap = new Map();
     allData.shift.list.forEach((s: any[]) => shiftTimeMap.set(s[0], { start: s[1], end: s[2] }));
 
     const lateList: any[] = [];
     const earlyList: any[] = [];
-    const personRecords: {[key:string]: {in?: string, out?: string}} = {};
+    // Key 改用 UID
+    const personRecords: {[key:string]: {in?: string, out?: string, name?: string}} = {};
 
     recordsToAnalyze.forEach((r: any[]) => {
-       const name = r[3], time = r[2], type = r[4];
-       if(!personRecords[name]) personRecords[name] = {};
-       if(type === '上班') { if(!personRecords[name].in || time < personRecords[name].in) personRecords[name].in = time; } 
-       else if(type === '下班') { if(!personRecords[name].out || time > personRecords[name].out) personRecords[name].out = time; }
+       // r[16] 是 UID, r[3] 是 Name
+       const uid = r[16] || r[3]; // 有 UID 用 UID，沒有用 Name (相容舊資料)
+       const name = r[3];
+       const time = r[2];
+       const type = r[4];
+
+       if(!personRecords[uid]) personRecords[uid] = { name }; // 暫存名字
+       
+       if(type === '上班') { 
+           if(!personRecords[uid].in || time < personRecords[uid].in) personRecords[uid].in = time; 
+       } 
+       else if(type === '下班') { 
+           if(!personRecords[uid].out || time > personRecords[uid].out) personRecords[uid].out = time; 
+       }
     });
 
-    Object.keys(personRecords).forEach(name => {
-        const shiftName = staffShiftMap.get(name);
+    Object.keys(personRecords).forEach(uid => {
+        // 用 UID 找班別
+        const shiftName = staffShiftMap.get(uid);
         
         // [修改] 排除 "大夜班" 和 "小夜/假日班"
         if (shiftName === "大夜班" || shiftName === "小夜/假日班") return;
 
         const shift = shiftTimeMap.get(shiftName);
-        const rec = personRecords[name];
+        const rec = personRecords[uid];
+        // 顯示名稱優先用 staffNameMap (最新)，否則用紀錄中的名字
+        const displayName = staffNameMap.get(uid) || rec.name || uid;
+
         if (shift) {
             // 判斷遲到 (上班時間 > 班表時間)
-            if (rec.in && shift.start && rec.in > (shift.start + ":59")) lateList.push({ name, time: rec.in, shift: shift.start });
+            if (rec.in && shift.start && rec.in > (shift.start + ":59")) lateList.push({ name: displayName, time: rec.in, shift: shift.start });
             // 判斷早退 (下班時間 < 班表時間)
-            if (rec.out && shift.end && rec.out < shift.end) earlyList.push({ name, time: rec.out, shift: shift.end });
+            if (rec.out && shift.end && rec.out < shift.end) earlyList.push({ name: displayName, time: rec.out, shift: shift.end });
         }
     });
     return { late: lateList, early: earlyList };
@@ -399,8 +427,8 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                             const region = row[8]; // [新增] 分區在 Index 8
                             return (
                                 <div key={i} 
-                                    // [修改] 點擊卡片 -> 開啟歷史紀錄 (優先用 UID，沒有則用名字)
-                                    onClick={() => openStaffHistory(uid || row[0])} 
+                                    // [修改] 傳入 UID 與 Name
+                                    onClick={() => openStaffHistory(uid, row[0])} 
                                     className="flex flex-col gap-3 rounded-2xl bg-[#1e293b] p-5 shadow-md shadow-black/10 border border-slate-700 relative overflow-hidden active:scale-[0.99] transition cursor-pointer hover:border-[#00bda4]/50 hover:bg-[#253248]"
                                 >
                                     <div className="flex justify-between items-start">
@@ -564,14 +592,26 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                             const staff = allData.staff?.list || [];
                             const supervisors = allData.supervisor?.list || [];
                             const supMap = new Map();
-                            supervisors.forEach((s: any[]) => supMap.set(s[0], { dept: s[1], title: s[2] }));
+                            
+                            // [修改] 建立主管 Map (優先使用 UID)
+                            supervisors.forEach((s: any[]) => {
+                                const rowUid = s[4]; // 假設後端將 UID 放在 Index 4
+                                const rowName = s[0];
+                                // 如果有 UID 就用 UID 當 key，否則用 Name (相容舊資料)
+                                if (rowUid) supMap.set(rowUid, { dept: s[1], title: s[2] });
+                                else supMap.set(rowName, { dept: s[1], title: s[2] });
+                            });
 
                             // 合併並排序 (主管在最上面)
                             const mergedList = staff.map((s: any[]) => {
                                 const name = s[0];
-                                const isSup = supMap.has(name);
-                                const info = supMap.get(name) || { dept: '', title: '' };
-                                return { name, isSup, ...info };
+                                const region = s[8]; // [新增] 分區資料在 Index 8
+                                const uid = s[9];    // [新增] 員工 UID 在 Index 9
+                                
+                                // [修改] 優先用 UID 查找，若找不到再試 Name
+                                const info = supMap.get(uid) || supMap.get(name);
+                                const isSup = !!info;
+                                return { name, uid, region, isSup, ...(info || { dept: '', title: '' }) };
                             }).sort((a: any, b: any) => (b.isSup ? 1 : 0) - (a.isSup ? 1 : 0));
 
                             return mergedList.map((item: any, idx: number) => {
@@ -582,21 +622,21 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
 
                                 const handleToggle = async () => {
                                     const newStatus = !item.isSup;
-                                    const action = newStatus ? "設為主管" : "移除主管";
-                                    // 若是移除，直接送出；若是新增，先不送出，等待填寫資料 (邏輯上 Toggle 直接生效比較直覺，這裡簡化為：移除直接生效，新增則開啟輸入框，需按儲存才算完成資料填寫，但後端需要先標記)
                                     // 修正策略：Toggle 直接呼叫 API 變更狀態。若是開啟，預設帶入空值。
                                     
                                     if (!newStatus) {
                                         onConfirm(`確定移除 [${item.name}] 的主管權限？`, async () => {
                                             setBlockText("更新權限中..."); setIsBlocking(true);
-                                            await api.adminUpdateSupervisor({ name: item.name, isSupervisor: false, adminName });
+                                            // [修改] 傳遞 uid
+                                            await api.adminUpdateSupervisor({ name: item.name, uid: item.uid, isSupervisor: false, adminName });
                                             await fetchAllData(false);
                                             setIsBlocking(false);
                                         });
                                     } else {
                                         // 開啟權限 (預設空值)
                                         setBlockText("啟用中..."); setIsBlocking(true);
-                                        await api.adminUpdateSupervisor({ name: item.name, isSupervisor: true, dept: "", title: "", adminName });
+                                        // [修改] 傳遞 uid
+                                        await api.adminUpdateSupervisor({ name: item.name, uid: item.uid, isSupervisor: true, dept: "", title: "", adminName });
                                         await fetchAllData(false);
                                         setIsBlocking(false);
                                     }
@@ -606,6 +646,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                                     setBlockText("儲存資料中..."); setIsBlocking(true);
                                     await api.adminUpdateSupervisor({ 
                                         name: item.name, 
+                                        uid: item.uid, // [修改] 傳遞 uid
                                         isSupervisor: true, 
                                         dept: currentEdit.dept, 
                                         title: currentEdit.title, 
@@ -636,7 +677,10 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                                                     {item.isSup ? <Crown size={20} fill="currentColor" /> : <User size={20} />}
                                                 </div>
                                                 <div>
-                                                    <p className={`font-bold text-lg ${item.isSup ? 'text-white' : 'text-slate-400'}`}>{item.name}</p>
+                                                    {/* [修改] 顯示 姓名-分區 */}
+                                                    <p className={`font-bold text-lg ${item.isSup ? 'text-white' : 'text-slate-400'}`}>
+                                                        {item.name}{item.region ? `-${item.region}` : ''}
+                                                    </p>
                                                     {item.isSup && <p className="text-xs text-[#ff9f28] font-bold">{item.dept} {item.title && ` - ${item.title}`}</p>}
                                                 </div>
                                             </div>
