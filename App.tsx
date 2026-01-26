@@ -29,6 +29,7 @@ const ModalDialog = ({ isOpen, type, message, onConfirm, onCancel }: any) => {
 
 interface User {
   name: string;
+  uid?: string;           // [新增] 唯一識別碼
   needReset: boolean;
   allowRemote?: boolean;
   isAdmin?: boolean;

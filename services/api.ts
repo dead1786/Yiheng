@@ -44,7 +44,7 @@ export const api = {
 
   adminUpdateSupervisor: (data: any) => post("adminUpdateSupervisor", data),
 
-  adminUnlockStaff: (targetName: string, adminName: string) => post("adminUnlockStaff", { targetName, adminName }),
+  adminUnlockStaff: (targetUid: string, adminName: string) => post("adminUnlockStaff", { targetUid, adminName }),
 
   adminDownloadExcel: (adminName: string, sheetName?: string) => post("adminDownloadExcel", { adminName, sheetName }),
 

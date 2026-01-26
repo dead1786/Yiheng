@@ -232,6 +232,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
   const executeClockIn = async (type: '上班' | '下班', force = false) => {
     const payload = { 
       name: user.name, 
+      uid: user.uid, // [新增] 傳送 UID
       station: selectedLoc, 
       lat: coords ? coords.lat : 0, 
       lng: coords ? coords.lng : 0, 

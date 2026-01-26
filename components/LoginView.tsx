@@ -62,11 +62,12 @@ export const LoginView = ({ onLogin }: Props) => {
       if (res.success) {
         onLogin({ 
             name: res.name, 
+            uid: res.uid,   
             needReset: res.needReset, 
             allowRemote: res.allowRemote, 
             isAdmin: res.isAdmin,
             isSupervisor: res.isSupervisor, 
-            regions: res.regions,      
+            regions: res.regions,  
             shift: res.shift 
         });
       } else {

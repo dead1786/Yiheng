@@ -184,7 +184,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
   const handleUnbindStaff = (name: string) => onConfirm(`解除 [${name}] 綁定？`, () => handleAction("解綁中...", api.adminUpdateStaff({ op: 'unbind', targetName: name, adminName })));
   const handleKickStaff = (name: string) => onConfirm(`強制登出 [${name}]？`, () => handleAction("執行中...", api.adminUpdateStaff({ op: 'kick', targetName: name, adminName })));
   const handleUnlockStaff = (name: string) => onConfirm(`解除 [${name}] 鎖定？`, () => handleAction("解鎖中...", api.adminUnlockStaff(name, adminName)));
-  const handleDeleteStaff = () => { if(editingStaff) onConfirm(`刪除員工 [${editingStaff[0]}]？`, async () => { if(await handleAction("刪除中...", api.adminUpdateStaff({ op: 'delete', targetName: editingStaff[0], adminName }))) setEditingStaff(null); }); };
+  const handleDeleteStaff = () => { if(editingStaff) onConfirm(`刪除員工 [${editingStaff[0]}]？`, async () => { if(await handleAction("刪除中...", api.adminUpdateStaff({ op: 'delete', targetUid: editingStaff[9], adminName }))) setEditingStaff(null); }); };
   const handleSaveStaff = async () => {
     if (!staffForm.name || !staffForm.password) return onAlert("姓名與密碼必填");
     if (staffForm.password !== '******') {
@@ -192,7 +192,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
           return onAlert("密碼格式錯誤：需為至少 4 位數字，且開頭不能為 0");
        }
     }
-    if(await handleAction("儲存中...", api.adminUpdateStaff({ op: isAddingStaff ? 'add' : 'edit', adminName, oldName: editingStaff ? editingStaff[0] : null, newData: staffForm }))) { setIsAddingStaff(false); setEditingStaff(null); }
+    if(await handleAction("儲存中...", api.adminUpdateStaff({ op: isAddingStaff ? 'add' : 'edit', adminName, targetUid: editingStaff ? editingStaff[9] : null, newData: staffForm }))) { setIsAddingStaff(false); setEditingStaff(null); }
   };
   const handleSaveLocation = async () => {
     if (!newLoc.name || !newLoc.lat) return onAlert("請填寫資訊");
@@ -395,10 +395,11 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {staffList.map((row: any[], i: number) => {
                             const isLocked = row[5] === "🔒已鎖定";
+                            const uid = row[9]; // [新增] UID 在第 10 欄 (Index 9)
                             return (
                                 <div key={i} 
-                                    // [修改] 點擊卡片 -> 開啟歷史紀錄
-                                    onClick={() => openStaffHistory(row[0])} 
+                                    // [修改] 點擊卡片 -> 開啟歷史紀錄 (優先用 UID，沒有則用名字)
+                                    onClick={() => openStaffHistory(uid || row[0])} 
                                     className="flex flex-col gap-3 rounded-2xl bg-[#1e293b] p-5 shadow-md shadow-black/10 border border-slate-700 relative overflow-hidden active:scale-[0.99] transition cursor-pointer hover:border-[#00bda4]/50 hover:bg-[#253248]"
                                 >
                                     <div className="flex justify-between items-start">
@@ -432,11 +433,11 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                                     
                                     <div className="flex gap-2" onClick={e => e.stopPropagation()}>
                                         {isLocked ? (
-                                            <button onClick={() => handleUnlockStaff(row[0])} className="flex-1 py-2 bg-[#00bda4]/10 text-[#00bda4] rounded-lg text-xs font-bold flex items-center justify-center gap-1 hover:bg-[#00bda4]/20"><Unlock size={14}/> 解鎖</button>
+                                            <button onClick={() => handleUnlockStaff(uid || row[0])} className="flex-1 py-2 bg-[#00bda4]/10 text-[#00bda4] rounded-lg text-xs font-bold flex items-center justify-center gap-1 hover:bg-[#00bda4]/20"><Unlock size={14}/> 解鎖</button>
                                         ) : (
-                                            <button onClick={() => handleUnbindStaff(row[0])} disabled={row[6] !== "📱已綁定"} className="flex-1 py-2 bg-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-30 disabled:text-slate-500 hover:bg-slate-600"><Unlink size={14}/> 解綁</button>
+                                            <button onClick={() => handleUnbindStaff(uid || row[0])} disabled={row[6] !== "📱已綁定"} className="flex-1 py-2 bg-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-30 disabled:text-slate-500 hover:bg-slate-600"><Unlink size={14}/> 解綁</button>
                                         )}
-                                        <button onClick={() => handleKickStaff(row[0])} className="flex-1 py-2 bg-red-500/10 text-red-400 rounded-lg text-xs font-bold flex items-center justify-center gap-1 hover:bg-red-500/20 border border-transparent hover:border-red-500/30"><UserMinus size={14}/> 踢除</button>
+                                        <button onClick={() => handleKickStaff(uid || row[0])} className="flex-1 py-2 bg-red-500/10 text-red-400 rounded-lg text-xs font-bold flex items-center justify-center gap-1 hover:bg-red-500/20 border border-transparent hover:border-red-500/30"><UserMinus size={14}/> 踢除</button>
                                     </div>
                                 </div>
                             );
