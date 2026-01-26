@@ -373,12 +373,12 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-slate-800 tracking-tight">每日打卡工作台</h1>
-              {/* [新增] 管理員入口 (左上角標題旁) */}
-              {user.isAdmin && (
+              {/* [修改] 管理員與主管入口 */}
+              {(user.isAdmin || user.isSupervisor) && (
                 <button 
                   onClick={onEnterAdmin}
                   className="bg-[#ff9f28] text-white p-1 rounded-md shadow-sm hover:bg-[#e88e20] transition-colors"
-                  title="進入管理員後台"
+                  title="進入管理後台"
                 >
                   <Crown size={14} fill="currentColor" />
                 </button>
