@@ -39,7 +39,18 @@ const LoadingOverlay = () => (
 
 export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }: Props) => {
   const [locations, setLocations] = useState<any[]>(() => { try { return JSON.parse(localStorage.getItem('cached_locations') || '[]'); } catch { return []; } });
-  const [selectedLoc, setSelectedLoc] = useState(() => { try { const locs = JSON.parse(localStorage.getItem('cached_locations') || '[]'); return locs[0]?.name || ''; } catch { return ''; } });
+  
+  // [修改] 初始化地點：優先讀取個人上次的打卡地點 (last_station_用戶名)
+  const [selectedLoc, setSelectedLoc] = useState(() => { 
+    try { 
+      const locs = JSON.parse(localStorage.getItem('cached_locations') || '[]');
+      const saved = localStorage.getItem(`last_station_${user.name}`);
+      // 如果有存過，且該地點還在目前的清單中，就直接選用
+      if (saved && locs.find((l: any) => l.name === saved)) return saved;
+      return locs[0]?.name || ''; 
+    } catch { return ''; } 
+  });
+
   const [historyData, setHistoryData] = useState<any>(() => { try { return JSON.parse(localStorage.getItem(`cached_history_${user.name}`) || 'null'); } catch { return null; } });
   
   const [coords, setCoords] = useState<{lat: number, lng: number} | null>(null);
@@ -245,12 +256,13 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
       setLockState(newLock);
       localStorage.setItem(`lock_state_${user.name}`, JSON.stringify(newLock));
 
+      localStorage.setItem(`last_station_${user.name}`, selectedLoc);
+
       setResult(`${type}打卡成功！`); 
       setTimeout(() => setResult(''), 3000);
       setTimeout(() => { fetchHistory(false); }, 1500);
     } else {
       if (res.status === 'warning_duplicate') { 
-        // 重複打卡警告，確認後強制執行
         if (onConfirm) { onConfirm(res.message, () => { executeClockIn(type, true); }); } 
         else { if(confirm(res.message)) executeClockIn(type, true); } 
       } else { 
