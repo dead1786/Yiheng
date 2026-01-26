@@ -84,8 +84,9 @@ const App: React.FC = () => {
     
     const checkStatus = async () => {
        try {
-         const res = await api.checkStatus(user.name, user.loginTime);
-         
+         // [修改] 改傳 user.uid
+         const res = await api.checkStatus(user.uid || '', user.loginTime);
+        
          // 情況 A: 強制登出
          if (!res.success && res.status === 'force_logout') {
             setUser(null);

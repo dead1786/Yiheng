@@ -285,12 +285,35 @@ function handleLogin(name, password, deviceId) {
   let isStaff = false;
   let staffRowIndex = -1;
   let staffData = staffSheet.getDataRange().getValues();
+  let matchedUserUID = null; // [新增]
+
+  // [修改] 遍歷所有員工，尋找「姓名 + 密碼」都吻合的那一位
   for (let i = 1; i < staffData.length; i++) {
-    if (String(staffData[i][0]).trim() === cleanName) {
-      isStaff = true;
-      staffRowIndex = i;
-      break;
+    const rowName = String(staffData[i][0]).trim();
+    if (rowName === cleanName) {
+       // 名字對了，檢查密碼 (支援明碼或Hash)
+       const rowPwd = String(staffData[i][1]).trim();
+       if (rowPwd === cleanPwd || rowPwd === hashedPwd) {
+          isStaff = true;
+          staffRowIndex = i;
+          // [新增] 取得或產生 UID
+          matchedUserUID = getOrGenUID(staffSheet, i, staffData[i][14]);
+          break; // 找到正確的那位了
+       }
+       // 如果密碼不對，繼續找下一位同名的人
     }
+  }
+
+  // [新增] 如果沒找到正確密碼，但有找到名字 (為了錯誤提示) -> 這裡簡化邏輯，若沒找到就當作帳號或密碼錯
+  // 但為了支援失敗次數累計，我們需要鎖定一個「目標」。
+  // 若同名且都密碼錯，我們鎖定「第一位」同名者來記過 (這是權衡之計)
+  if (!isStaff) {
+     for (let i = 1; i < staffData.length; i++) {
+        if (String(staffData[i][0]).trim() === cleanName) {
+           staffRowIndex = i; // 鎖定第一位同名者
+           break;
+        }
+     }
   }
 
   if (isAdmin && !isStaff) {
@@ -355,10 +378,12 @@ function handleLogin(name, password, deviceId) {
 
        return { 
          success: true, 
-         name: cleanName, 
+         name: cleanName,
+         uid: matchedUserUID, // [新增] 回傳 UID
          needReset: (status === true || status === "TRUE"), 
          // [修改] 3. 主管也視為擁有遠端權限
-         allowRemote: allowRemote || isAdmin || isSupervisor, 
+         allowRemote: allowRemote 
+           || isAdmin || isSupervisor, 
          isAdmin: isAdmin,
          // [新增] 4. 回傳主管狀態
          isSupervisor: isSupervisor, 
@@ -476,7 +501,20 @@ function handleClockIn(data) {
 
   } else { res = "地點異常"; }
   const now = new Date();
-  sheet.appendRow([now, formatDate(now,"yyyy/MM/dd"), formatDate(now,"HH:mm:ss"), data.name, data.type, data.station, res, `${data.lat},${data.lng}`, note]);
+  // [修改] 補齊中間的 J~P 欄位 (7個空字串)，將 UID 寫入 Q 欄 (第 17 欄)
+  sheet.appendRow([
+    now, 
+    formatDate(now,"yyyy/MM/dd"), 
+    formatDate(now,"HH:mm:ss"), 
+    data.name, 
+    data.type, 
+    data.station, 
+    res, 
+    `${data.lat},${data.lng}`, 
+    note,
+    "", "", "", "", "", "", "", // J, K, L, M, N, O, P (7個空位)
+    data.uid || ""              // Q (UID)
+  ]);
   SpreadsheetApp.flush(); 
   return res.includes("失敗") ? { success: false, message: res } : { success: true, message: "打卡成功" };
 }
@@ -630,9 +668,12 @@ function handleAdminGetData(data) {
             const lockedTime = row[7] ? new Date(row[7]).getTime() : 0;
             const isLocked = lockedTime > now;
             const deviceId = row[10];
-            const isBound = (deviceId && deviceId.length > 5);
+            const isBound = 
+            (deviceId && deviceId.length > 5);
             const shift = row[11] || ""; 
-            filteredList.push([ row[0], "******", row[2], row[3], row[4], isLocked ? "🔒已鎖定" : "正常", isBound ? "📱已綁定" : "未綁定", shift, region ]);
+            const uid = row[14] || ""; // [新增] 讀取 UID
+            // [修改] 增加 UID 到陣列最後 (Index 9)
+            filteredList.push([ row[0], "******", row[2], row[3], row[4], isLocked ? "🔒已鎖定" : "正常", isBound ? "📱已綁定" : "未綁定", shift, region, uid ]);
         }
     });
     list = filteredList;
@@ -746,23 +787,30 @@ function handleAdminUpdateStaff(data) {
   const adminName = data.adminName || "未知管理員";
 
   if (op === 'add') {
-    const rows = sheet.getDataRange().getValues();
-    for(let i=1; i<rows.length; i++) { if(rows[i][0] === data.newData.name) return { success: false, message: "員工姓名已存在" };
-    }
-    // [修改] 這裡進行加密
-    sheet.appendRow([ data.newData.name, hashData(data.newData.password), data.newData.lineId || "", "TRUE", data.newData.allowRemote === "TRUE" ? "TRUE" : "FALSE", 0, "", "", 24, "", "", data.newData.shift || "", "" ]);
-    logAdminAction(adminName, "新增員工", `新增了 ${data.newData.name}`);
+    // 產生 UID
+    const newUID = 'u_' + Math.random().toString(36).substr(2, 8);
+    // 寫入包含 UID (第 15 欄)
+    sheet.appendRow([ data.newData.name, hashData(data.newData.password), data.newData.lineId || "", "TRUE", data.newData.allowRemote === "TRUE" ? "TRUE" : "FALSE", 0, "", "", 24, "", "", data.newData.shift || "", "", "", newUID ]);
+    logAdminAction(adminName, "新增員工", `新增了 ${data.newData.name} (UID:${newUID})`);
     return { success: true };
   }
 
   if (op === 'edit') {
     const rows = sheet.getDataRange().getValues();
-    for(let i=1; i<rows.length; i++) {
-      if(rows[i][0] === data.oldName) {
+    let targetIndex = findStaffIndexByUID(rows, data.targetUid);
+    
+    // 相容性搜尋 (若無 UID 則用舊名找)
+    if (targetIndex === -1 && data.oldName) {
+       for(let i=1; i<rows.length; i++) {
+          if(rows[i][0] === data.oldName) { targetIndex = i; break; }
+       }
+    }
+
+    if (targetIndex !== -1) {
+        const i = targetIndex;
         const oldRow = rows[i];
         const oldData = { name: String(oldRow[0]), pwd: String(oldRow[1]), line: String(oldRow[2]), reset: String(oldRow[3]).toUpperCase(), remote: String(oldRow[4]).toUpperCase(), shift: String(oldRow[11]||"") };
         
-        // [修改] 判斷密碼是否變更並加密
         let finalPwd = oldData.pwd;
         let isPwdChanged = false;
         if (data.newData.password !== "******") {
@@ -785,76 +833,68 @@ function handleAdminUpdateStaff(data) {
         const logDetail = changes.length > 0 ? `修改 ${data.oldName}：${changes.join('、')}` : `修改 ${data.oldName} (無變更)`;
         logAdminAction(adminName, "編輯員工", logDetail);
         
-        updateAdminPasswordIfExist(data.oldName, newData.name, newData.pwd);
+        // [移除] 移除 updateAdminPasswordIfExist 以避免同名誤改
         return { success: true };
-      }
     }
     return { success: false, message: "找不到該員工" };
+  
   }
 
-  // Kick, Unbind, Delete 邏輯保持不變
-  if (op === 'kick') {
+  // [修正] 確保這段邏輯在函式大括號內部
+  if (['kick', 'unbind', 'delete'].includes(op)) {
     const rows = sheet.getDataRange().getValues();
-    for(let i=1; i<rows.length; i++) { 
-        if(rows[i][0] === data.targetName) { 
-            sheet.getRange(i+1, 13).setValue(new Date());
-            logAdminAction(adminName, "強制登出", `將 ${data.targetName} 強制登出`);
-            return { success: true };
-        } 
+    let targetIndex = findStaffIndexByUID(rows, data.targetUid);
+    
+    // Fallback search
+    if (targetIndex === -1 && data.targetName) {
+       for(let i=1; i<rows.length; i++) {
+          if(rows[i][0] === data.targetName) { targetIndex = i; break; }
+       }
     }
-    return { success: false, message: "找不到該員工" };
-  }
 
-  if (op === 'unbind') {
-    const rows = sheet.getDataRange().getValues();
-    for(let i=1; i<rows.length; i++) { 
-        if(rows[i][0] === data.targetName) { 
-            sheet.getRange(i+1, 11).setValue("");
-            logAdminAction(adminName, "解除綁定", `解除了 ${data.targetName} 的裝置綁定`);
-            return { success: true };
-        } 
-    }
-    return { success: false, message: "找不到該員工" };
-  }
+    if (targetIndex === -1) return { success: false, message: "找不到該員工" };
 
-  if (op === 'delete') {
-    const rows = sheet.getDataRange().getValues();
-    for(let i=1; i<rows.length; i++) { 
-        if(rows[i][0] === data.targetName) { 
-            sheet.deleteRow(i+1);
-            logAdminAction(adminName, "刪除員工", `刪除了 ${data.targetName}`); 
-            return { success: true };
-        } 
+    const i = targetIndex;
+    const targetRealName = rows[i][0];
+
+    if (op === 'kick') {
+        sheet.getRange(i+1, 13).setValue(new Date());
+        logAdminAction(adminName, "強制登出", `將 ${targetRealName} 強制登出`);
+        return { success: true };
     }
-    return { success: false, message: "找不到該員工" };
+
+    if (op === 'unbind') {
+        sheet.getRange(i+1, 11).setValue("");
+        logAdminAction(adminName, "解除綁定", `解除了 ${targetRealName} 的裝置綁定`);
+        return { success: true };
+    }
+
+    if (op === 'delete') {
+        sheet.deleteRow(i+1);
+        logAdminAction(adminName, "刪除員工", `刪除了 ${targetRealName}`); 
+        return { success: true };
+    }
   }
+  
   return { success: false, message: "未知操作" };
 }
 
-function updateAdminPasswordIfExist(oldName, newName, newPwd) {
-   const ss = SpreadsheetApp.getActiveSpreadsheet();
-   const sheet = ss.getSheetByName(SHEET_ADMINS);
-   if (!sheet) return;
-   const rows = sheet.getDataRange().getValues();
-   for(let i=1; i<rows.length; i++) {
-      if(rows[i][0] === oldName) {
-         sheet.getRange(i+1, 1).setValue(newName);
-         sheet.getRange(i+1, 2).setValue(newPwd);
-         return;
-      }
-   }
-}
 
 function handleAdminUnlockStaff(data) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_STAFF);
   const rows = sheet.getDataRange().getValues();
-  for(let i=1; i<rows.length; i++) { 
-      if(rows[i][0] === data.targetName) { 
-          sheet.getRange(i+1, 6, 1, 4).setValues([[0, "", "", 24]]);
-          logAdminAction(data.adminName, "解除鎖定", `解鎖了 ${data.targetName} 的帳號`); 
-          return { success: true };
-      } 
+  
+  let targetIndex = findStaffIndexByUID(rows, data.targetUid);
+  if (targetIndex === -1 && data.targetName) { // Fallback
+     for(let i=1; i<rows.length; i++) { if(rows[i][0] === data.targetName) { targetIndex = i; break; } }
+  }
+
+  if (targetIndex !== -1) {
+      const i = targetIndex;
+      sheet.getRange(i+1, 6, 1, 4).setValues([[0, "", "", 24]]);
+      logAdminAction(data.adminName, "解除鎖定", `解鎖了 ${rows[i][0]} 的帳號`); 
+      return { success: true };
   }
   return { success: false, message: "找不到員工" };
 }
@@ -1352,4 +1392,25 @@ function handleAdminGetStaffHistory(targetName) {
       targetName: cleanName
     } 
   };
+}
+
+// [新增] 產生或讀取 UID (Column O / Index 14)
+function getOrGenUID(sheet, rowIndex, existingUID) {
+  if (existingUID && String(existingUID).length > 2) return existingUID;
+  
+  // 產生新 UID (8碼亂數)
+  const newUID = 'u_' + Math.random().toString(36).substr(2, 8);
+  // 寫入 Sheet (第 15 欄)
+  sheet.getRange(rowIndex + 1, 15).setValue(newUID);
+  return newUID;
+}
+
+// [新增] 透過 UID 尋找員工列 (回傳 index, 不是 row number)
+function findStaffIndexByUID(data, uid) {
+  if (!uid) return -1;
+  for (let i = 1; i < data.length; i++) {
+    // 檢查 UID (Col 14)
+    if (String(data[i][14]) === String(uid)) return i;
+  }
+  return -1;
 }

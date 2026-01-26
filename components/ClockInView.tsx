@@ -136,8 +136,8 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
         setLoadingHistory(true); 
     }
     try {
-        // [修改] 傳入 loginTime
-        const res = await api.getHistory(user.name, user.loginTime);
+        // [修改] 改傳 user.uid
+        const res = await api.getHistory(user.uid, user.loginTime);
         
         // [新增] 檢查強制登出
         if (res.status === 'force_logout') {

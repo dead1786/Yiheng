@@ -28,9 +28,11 @@ export const api = {
   getLocations: () => post("getLocations"),
   
   clockIn: (data: any) => post("clockIn", data),
-  getHistory: (name: string, loginTime?: number) => post("getHistory", { name, loginTime }),
+  // [修改] 改傳 uid
+  getHistory: (uid: string, loginTime?: number) => post("getHistory", { uid, loginTime }),
 
-  checkStatus: (name: string, loginTime?: number) => post("checkStatus", { name, loginTime }),
+  // [修改] 改傳 uid
+  checkStatus: (uid: string, loginTime?: number) => post("checkStatus", { uid, loginTime }),
   
   adminGetData: (dataType: 'staff' | 'line' | 'location' | 'record' | 'log' | 'all' | 'shift', adminName?: string) => post("adminGetData", { dataType, adminName }),
   

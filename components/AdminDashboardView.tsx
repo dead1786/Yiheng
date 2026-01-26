@@ -396,6 +396,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                         {staffList.map((row: any[], i: number) => {
                             const isLocked = row[5] === "🔒已鎖定";
                             const uid = row[9]; // [新增] UID 在第 10 欄 (Index 9)
+                            const region = row[8]; // [新增] 分區在 Index 8
                             return (
                                 <div key={i} 
                                     // [修改] 點擊卡片 -> 開啟歷史紀錄 (優先用 UID，沒有則用名字)
@@ -405,7 +406,10 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                                     <div className="flex justify-between items-start">
                                         <div className="flex flex-col gap-1 w-full overflow-hidden">
                                             <div className="flex items-center gap-2">
-                                                <p className="text-xl font-black text-slate-100 tracking-wide">{row[0]}</p>
+                                                {/* [修改] 顯示 姓名-分區 */}
+                                                <p className="text-xl font-black text-slate-100 tracking-wide">
+                                                    {row[0]}{region ? `-${region}` : ''}
+                                                </p>
                                                 {row[7] && <span className="bg-slate-700 px-1.5 py-0.5 rounded text-xs text-slate-300 border border-slate-600 font-bold whitespace-nowrap">{row[7]}</span>}
                                             </div>
                                             <p className="text-slate-500 text-xs font-mono font-medium truncate w-full" title={row[2]}>
