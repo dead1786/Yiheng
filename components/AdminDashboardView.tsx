@@ -45,7 +45,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
   // Forms
   const [isAddingStaff, setIsAddingStaff] = useState(false);
   const [editingStaff, setEditingStaff] = useState<any>(null);
-  const [staffForm, setStaffForm] = useState({ name: '', password: '123', lineId: '', needReset: 'TRUE', allowRemote: 'FALSE', shift: '', region: '' });
+  const [staffForm, setStaffForm] = useState({ name: '', password: '1234', lineId: '', needReset: 'TRUE', allowRemote: 'FALSE', shift: '', region: '' });
   
   // [修改] 地點相關 State
   const [editingLoc, setEditingLoc] = useState<any>(null); // 紀錄目前正在編輯的舊資料
@@ -252,7 +252,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
     } catch(e) { onAlert("發生錯誤"); } finally { setIsBlocking(false); }
   };
 
-  const openAddStaff = () => { setStaffForm({ name: '', password: '123', lineId: '', needReset: 'TRUE', allowRemote: 'FALSE', shift: '', region: '' }); setIsAddingStaff(true); setEditingStaff(null); };
+  const openAddStaff = () => { setStaffForm({ name: '', password: '1234', lineId: '', needReset: 'TRUE', allowRemote: 'FALSE', shift: '', region: '' }); setIsAddingStaff(true); setEditingStaff(null); };
   const openEditStaff = (row: any[]) => { setStaffForm({ name: row[0], password: row[1], lineId: row[2], needReset: row[3], allowRemote: row[4], shift: row[7] || "", region: row[8] || "" }); setEditingStaff(row); setIsAddingStaff(false); };
 
   const staffList = allData.staff?.list || [];

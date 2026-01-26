@@ -31,8 +31,8 @@ export const api = {
   // [修改] 改傳 uid
   getHistory: (uid: string, loginTime?: number) => post("getHistory", { uid, loginTime }),
 
-  // [修改] 改傳 uid
-  checkStatus: (uid: string, loginTime?: number) => post("checkStatus", { uid, loginTime }),
+  // [修改] 增加 name 參數 (讓純管理員能通過驗證)
+  checkStatus: (uid: string, loginTime?: number, name?: string) => post("checkStatus", { uid, loginTime, name }),
   
   adminGetData: (dataType: 'staff' | 'line' | 'location' | 'record' | 'log' | 'all' | 'shift', adminName?: string) => post("adminGetData", { dataType, adminName }),
   
