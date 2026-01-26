@@ -45,7 +45,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
   // Forms
   const [isAddingStaff, setIsAddingStaff] = useState(false);
   const [editingStaff, setEditingStaff] = useState<any>(null);
-  const [staffForm, setStaffForm] = useState({ name: '', password: '123', lineId: '', needReset: 'TRUE', allowRemote: 'FALSE', shift: '' });
+  const [staffForm, setStaffForm] = useState({ name: '', password: '123', lineId: '', needReset: 'TRUE', allowRemote: 'FALSE', shift: '', region: '' });
   
   // [修改] 地點相關 State
   const [editingLoc, setEditingLoc] = useState<any>(null); // 紀錄目前正在編輯的舊資料
@@ -54,7 +54,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
   const [exportSheet, setExportSheet] = useState('');
   
   // [新增] 主管設置相關 State (用來暫存編輯中的資料)
-  const [supEdits, setSupEdits] = useState<{[key:string]: {dept: string, title: string}}>({});
+  const [supEdits, setSupEdits] = useState<{[key:string]: {dept: string, title: string, region: string}}>({});
   const [sheetList, setSheetList] = useState<{name:string, label:string}[]>([]);
 
   // Modals for Stats & History
@@ -252,8 +252,8 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
     } catch(e) { onAlert("發生錯誤"); } finally { setIsBlocking(false); }
   };
 
-  const openAddStaff = () => { setStaffForm({ name: '', password: '123', lineId: '', needReset: 'TRUE', allowRemote: 'FALSE', shift: '' }); setIsAddingStaff(true); setEditingStaff(null); };
-  const openEditStaff = (row: any[]) => { setStaffForm({ name: row[0], password: row[1], lineId: row[2], needReset: row[3], allowRemote: row[4], shift: row[7] || "" }); setEditingStaff(row); setIsAddingStaff(false); };
+  const openAddStaff = () => { setStaffForm({ name: '', password: '123', lineId: '', needReset: 'TRUE', allowRemote: 'FALSE', shift: '', region: '' }); setIsAddingStaff(true); setEditingStaff(null); };
+  const openEditStaff = (row: any[]) => { setStaffForm({ name: row[0], password: row[1], lineId: row[2], needReset: row[3], allowRemote: row[4], shift: row[7] || "", region: row[8] || "" }); setEditingStaff(row); setIsAddingStaff(false); };
 
   const staffList = allData.staff?.list || [];
   const locList = allData.location?.list || [];
@@ -616,9 +616,9 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
 
                             return mergedList.map((item: any, idx: number) => {
                                 // 判斷是否正在編輯 (有輸入值) 或顯示原值
-                                const currentEdit = supEdits[item.name] || { dept: item.dept, title: item.title };
+                                const currentEdit = supEdits[item.name] || { dept: item.dept, title: item.title, region: item.region || "" }; // region 初始值
                                 // 是否有變更 (用於顯示儲存按鈕狀態)
-                                const hasChanged = currentEdit.dept !== item.dept || currentEdit.title !== item.title;
+                                const hasChanged = currentEdit.dept !== item.dept || currentEdit.title !== item.title || currentEdit.region !== (item.region || "");
 
                                 const handleToggle = async () => {
                                     const newStatus = !item.isSup;
@@ -636,7 +636,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                                         // 開啟權限 (預設空值)
                                         setBlockText("啟用中..."); setIsBlocking(true);
                                         // [修改] 傳遞 uid
-                                        await api.adminUpdateSupervisor({ name: item.name, uid: item.uid, isSupervisor: true, dept: "", title: "", adminName });
+                                        await api.adminUpdateSupervisor({ name: item.name, uid: item.uid, isSupervisor: true, dept: "", title: "", region: "", adminName });
                                         await fetchAllData(false);
                                         setIsBlocking(false);
                                     }
@@ -649,7 +649,8 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                                         uid: item.uid, // [修改] 傳遞 uid
                                         isSupervisor: true, 
                                         dept: currentEdit.dept, 
-                                        title: currentEdit.title, 
+                                        title: currentEdit.title,
+                                        region: currentEdit.region, // [新增]
                                         adminName 
                                     });
                                     // 清除該人的編輯暫存
@@ -662,7 +663,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                                     onAlert("資料已更新");
                                 };
 
-                                const handleEditChange = (field: 'dept' | 'title', val: string) => {
+                                const handleEditChange = (field: 'dept' | 'title' | 'region', val: string) => {
                                     setSupEdits(prev => ({
                                         ...prev,
                                         [item.name]: { ...currentEdit, [field]: val }
@@ -681,7 +682,10 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                                                     <p className={`font-bold text-lg ${item.isSup ? 'text-white' : 'text-slate-400'}`}>
                                                         {item.name}{item.region ? `-${item.region}` : ''}
                                                     </p>
-                                                    {item.isSup && <p className="text-xs text-[#ff9f28] font-bold">{item.dept} {item.title && ` - ${item.title}`}</p>}
+                                                    {/* [新增] 顯示 UID */}
+                                                    <p className="text-[10px] font-mono text-slate-500">UID: {item.uid || '無'}</p>
+                                                    
+                                                    {item.isSup && <p className="text-xs text-[#ff9f28] font-bold mt-1">{item.dept} {item.title && ` / ${item.title}`}</p>}
                                                 </div>
                                             </div>
                                             
@@ -704,6 +708,12 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                                                     placeholder="職稱" 
                                                     value={currentEdit.title} 
                                                     onChange={e => handleEditChange('title', e.target.value)}
+                                                    className="flex-1 bg-[#0f172a] text-white text-sm p-2 rounded-lg border border-slate-700 outline-none focus:border-[#ff9f28]" 
+                                                />
+                                                <input 
+                                                    placeholder="分區 (逗號分隔)" 
+                                                    value={currentEdit.region} 
+                                                    onChange={e => handleEditChange('region', e.target.value)}
                                                     className="flex-1 bg-[#0f172a] text-white text-sm p-2 rounded-lg border border-slate-700 outline-none focus:border-[#ff9f28]" 
                                                 />
                                                 <button 
@@ -851,10 +861,21 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                     <button onClick={() => { setIsAddingStaff(false); setEditingStaff(null); }} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={20}/></button>
                 </div>
                 <div className="space-y-4 mb-6">
+                    {/* [新增] 顯示 UID (僅編輯模式) */}
+                    {editingStaff && (
+                       <div className="bg-slate-800 p-2 rounded-lg text-center">
+                          <span className="text-xs text-slate-500 font-mono">UID: {editingStaff[9]}</span>
+                       </div>
+                    )}
+
                     <div className="grid grid-cols-2 gap-4">
                         <input value={staffForm.name} onChange={e=>setStaffForm({...staffForm, name: e.target.value})} className="p-3 bg-[#334155] text-white rounded-xl font-bold outline-none placeholder-slate-500 focus:ring-1 focus:ring-[#00bda4]" placeholder="姓名" />
                         <input value={staffForm.shift} onChange={e=>setStaffForm({...staffForm, shift: e.target.value})} className="p-3 bg-[#334155] text-white rounded-xl font-bold outline-none placeholder-slate-500 focus:ring-1 focus:ring-[#00bda4]" placeholder="班別 (例如: 早班)" />
                     </div>
+                    
+                    {/* [新增] 分區欄位 */}
+                    <input value={staffForm.region} onChange={e=>setStaffForm({...staffForm, region: e.target.value})} className="w-full p-3 bg-[#334155] text-white rounded-xl font-bold outline-none placeholder-slate-500 focus:ring-1 focus:ring-[#00bda4]" placeholder="分區 (例如: 北區,中區)" />
+
                     <input value={staffForm.password} onChange={e=>setStaffForm({...staffForm, password: e.target.value})} className="w-full p-3 bg-[#334155] text-white rounded-xl font-bold outline-none placeholder-slate-500 focus:ring-1 focus:ring-[#00bda4]" placeholder="密碼" />
                     <input value={staffForm.lineId} onChange={e=>setStaffForm({...staffForm, lineId: e.target.value})} className="w-full p-3 bg-[#334155] text-white rounded-xl font-bold outline-none placeholder-slate-500 focus:ring-1 focus:ring-[#00bda4]" placeholder="Line ID (選填)" />
                     <div className="flex gap-2">

@@ -94,7 +94,6 @@ const App: React.FC = () => {
             setUser(null);
             setShowAdmin(false);
             localStorage.removeItem('yh_app_session');
-            // 因為現在 ModalDialog 在最外層，這裡呼叫 showAlert 會正常顯示在 LoginView 之上
             showAlert(res.message || "⚠️ 您已被管理員強制登出系統");
          } 
          // 情況 B: 需重設密碼 (即時觸發)
@@ -105,6 +104,25 @@ const App: React.FC = () => {
                 localStorage.setItem('yh_app_session', JSON.stringify(updatedUser));
                 showAlert("⚠️ 管理員要求您立即變更密碼！");
             }
+         }
+         // [新增] 情況 C: 自動同步狀態 (免登出刷新)
+         else if (res.success && res.status === 'ok' && res.updatedUser) {
+             const newData = res.updatedUser;
+             // 簡單比對幾個關鍵欄位，有變動才更新 State (避免無限 Render)
+             const hasChanged = 
+                 newData.allowRemote !== user.allowRemote ||
+                 newData.isSupervisor !== user.isSupervisor ||
+                 JSON.stringify(newData.shift) !== JSON.stringify(user.shift) ||
+                 JSON.stringify(newData.regions) !== JSON.stringify(user.regions);
+             
+             if (hasChanged) {
+                 console.log("Auto-sync user profile...");
+                 const syncedUser = { ...user, ...newData };
+                 setUser(syncedUser);
+                 localStorage.setItem('yh_app_session', JSON.stringify(syncedUser));
+                 // 若權限變更為管理員/主管，自動切換 Admin 顯示 (可選)
+                 // if (newData.isAdmin || newData.isSupervisor) setShowAdmin(true);
+             }
          }
        } catch(e) { }
     };
