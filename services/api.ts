@@ -21,16 +21,18 @@ export const api = {
   
   updatePassword: (name: string, oldPassword: string, newPassword: string) => post("updatePassword", { name, oldPassword, newPassword }),
 
+  // [新增] 忘記密碼 API
+  requestReset: (name: string) => post("requestReset", { name }),
+  checkResetCode: (name: string, code: string) => post("checkResetCode", { name, code }),
+  verifyReset: (name: string, code: string, newPassword: string) => post("verifyReset", { name, code, newPassword }),
+
   getLocations: () => post("getLocations"),
   
-  // [修改] 增加 loginTime 參數
   clockIn: (data: any) => post("clockIn", data),
   getHistory: (name: string, loginTime?: number) => post("getHistory", { name, loginTime }),
 
-  // [新增] 背景檢查狀態
   checkStatus: (name: string, loginTime?: number) => post("checkStatus", { name, loginTime }),
   
-  // 管理員功能
   adminGetData: (dataType: 'staff' | 'line' | 'location' | 'record' | 'log' | 'all' | 'shift', adminName?: string) => post("adminGetData", { dataType, adminName }),
   
   adminUpdateLocation: (data: any) => post("adminUpdateLocation", data),
@@ -38,6 +40,10 @@ export const api = {
   
   // [新增] 班別設定
   adminUpdateShift: (data: any) => post("adminUpdateShift", data),
+
+  // [新增] 查詢功能
+  adminGetDailyRecords: (date: string) => post("adminGetDailyRecords", { date }),
+  adminGetStaffHistory: (targetName: string) => post("adminGetStaffHistory", { targetName }),
   
   adminUnlockStaff: (targetName: string, adminName: string) => post("adminUnlockStaff", { targetName, adminName }),
 

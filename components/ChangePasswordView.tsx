@@ -18,7 +18,9 @@ export const ChangePasswordView = ({ user, onPasswordChanged, onAlert }: any) =>
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if(newPwd.length < 4) return onAlert("密碼至少 4 位數");
+    if (!/^[1-9]\d{3,}$/.test(newPwd)) {
+      return onAlert("密碼格式錯誤：需為至少 4 位數字，且開頭不能為 0");
+    }
 
     setLoading(true); // 鎖定
     const res = await api.changePassword(user.name, newPwd);

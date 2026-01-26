@@ -1,6 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/api';
-import { Users, MessageSquare, MapPin, ClipboardList, LogOut, Plus, RefreshCw, Trash2, Edit2, FileText, X, Save, Unlock, Loader2, Unlink, FileSpreadsheet, Download, Clock, Ban } from 'lucide-react';
+import { 
+  ShieldCheck, Search, Bell, Users, MapPin, Share, Activity, AlertTriangle, 
+  Filter, Link, UserMinus, Lock, Unlock, Home, History, User, Settings,
+  Download, FileSpreadsheet, Loader2, Unlink, Trash2, Plus, Edit2, X, Save,
+  Clock, MessageSquare, FileText, ChevronRight, AlertCircle, Menu, LogOut, LayoutDashboard, Calendar
+} from 'lucide-react';
 
 interface Props {
   onBack: () => void;
@@ -9,473 +14,803 @@ interface Props {
   adminName: string;
 }
 
-const LoadingOverlay = ({text = "資料同步中..."}: {text?: string}) => (
-  <div className="fixed inset-0 z-[9999] bg-white/40 backdrop-blur-sm flex items-center justify-center animate-in fade-in duration-300">
-    <div className="bg-black/80 text-white px-8 py-6 rounded-2xl shadow-2xl flex flex-col items-center gap-4">
-      <Loader2 className="animate-spin text-blue-400 w-10 h-10" />
+const LoadingOverlay = ({text = "處理中..."}: {text?: string}) => (
+  <div className="fixed inset-0 z-[9999] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center animate-in fade-in duration-300">
+    <div className="bg-slate-800 text-white px-8 py-6 rounded-2xl shadow-2xl border border-slate-700 flex flex-col items-center gap-4">
+      <Loader2 className="animate-spin text-[#00bda4] w-10 h-10" />
       <span className="font-bold tracking-widest text-lg">{text}</span>
     </div>
   </div>
 );
 
-const ExportModal = ({ isOpen, onClose, onConfirm, adminName }: any) => {
-  const [loading, setLoading] = useState(false);
-  const [sheets, setSheets] = useState<{name:string, label:string}[]>([]);
-  const [selectedSheet, setSelectedSheet] = useState('');
-
-  useEffect(() => {
-    if (isOpen) {
-      setLoading(true);
-      api.adminGetSheetList().then(res => {
-        setLoading(false);
-        if (res.success && res.list && res.list.length > 0) {
-          setSheets(res.list);
-          setSelectedSheet(res.list[0].name); 
-        } else {
-          setSheets([]); 
-        }
-      });
-    }
-  }, [isOpen]);
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6">
-        <div className="text-center mb-6">
-          <div className="bg-green-100 p-3 rounded-full w-14 h-14 flex items-center justify-center mx-auto mb-3 text-green-600 shadow-inner">
-            <FileSpreadsheet size={28} />
-          </div>
-          <h3 className="font-bold text-xl text-gray-800">匯出 Excel 報表</h3>
-          <p className="text-sm text-gray-500 mt-1">請選擇要匯出的月份資料</p>
-        </div>
-
-        {loading ? (
-          <div className="py-8 text-center text-gray-400 flex flex-col items-center gap-2">
-            <Loader2 className="animate-spin" /> 讀取選單中...
-          </div>
-        ) : (
-          <div className="space-y-4">
-             <div className="relative">
-                <select 
-                  value={selectedSheet} 
-                  onChange={(e) => setSelectedSheet(e.target.value)}
-                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-700 outline-none focus:ring-2 focus:ring-green-500 appearance-none"
-                >
-                  {sheets.map(s => <option key={s.name} value={s.name}>{s.label}</option>)}
-                </select>
-                <div className="absolute right-3 top-3.5 pointer-events-none text-gray-400">▼</div>
-             </div>
-             
-             <div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-700 leading-relaxed">
-                💡 系統將下載打卡紀錄。
-             </div>
-
-             <div className="flex gap-3 mt-4">
-                <button onClick={onClose} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition">取消</button>
-                <button 
-                  onClick={() => onConfirm(selectedSheet)} 
-                  disabled={!selectedSheet}
-                  className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 shadow-lg shadow-green-200 transition disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  <Download size={18}/> 確認匯出
-                </button>
-             </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-type DataType = 'staff' | 'line' | 'location' | 'record' | 'log' | 'shift';
-interface DataSection { headers: string[]; list: any[]; }
-interface AllData { staff: DataSection; line: DataSection; location: DataSection; record: DataSection; log: DataSection; shift: DataSection; }
+// 定義 Tab 類型
+type MainTab = 'admin' | 'history' | 'others';
+type SubTab = 'staff' | 'location' | 'shift' | 'export' | 'line' | 'log';
 
 export const AdminDashboardView = ({ onBack, onAlert, onConfirm, adminName }: Props) => {
-  const [activeTab, setActiveTab] = useState<DataType>('record');
+  // Navigation State
+  const [mainTab, setMainTab] = useState<MainTab>('admin');
+  const [subTab, setSubTab] = useState<SubTab>('staff');
   
-  const [allData, setAllData] = useState<AllData>(() => {
+  // Data State
+  const [allData, setAllData] = useState<any>(() => {
     try { return JSON.parse(localStorage.getItem('admin_cache_all') || '{}'); } catch { return {}; }
   });
   
   const [isBlocking, setIsBlocking] = useState(false); 
   const [blockText, setBlockText] = useState("資料同步中...");
-  const [isFetching, setIsFetching] = useState(false); 
-  const [showExport, setShowExport] = useState(false);
-
-  // Staff Form
-  const [editingStaff, setEditingStaff] = useState<any>(null);
+  
+  // Forms
   const [isAddingStaff, setIsAddingStaff] = useState(false);
+  const [editingStaff, setEditingStaff] = useState<any>(null);
   const [staffForm, setStaffForm] = useState({ name: '', password: '123', lineId: '', needReset: 'TRUE', allowRemote: 'FALSE', shift: '' });
   
-  // Location Form
-  const [newLoc, setNewLoc] = useState({ name: '', lat: '', lng: '', radius: '500' });
-
-  // Shift Form
+  // [修改] 地點相關 State
+  const [editingLoc, setEditingLoc] = useState<any>(null); // 紀錄目前正在編輯的舊資料
+  const [newLoc, setNewLoc] = useState({ name: '', lat: '', lng: '', radius: '500', ip: '' });
   const [newShift, setNewShift] = useState({ name: '', start: '09:00', end: '18:00' });
+  const [exportSheet, setExportSheet] = useState('');
+  const [sheetList, setSheetList] = useState<{name:string, label:string}[]>([]);
+
+  // Modals for Stats & History
+  const [statModal, setStatModal] = useState<{title: string, list: any[]} | null>(null);
+  
+  // [新增] 員工歷史紀錄 Modal 狀態
+  const [historyModalUser, setHistoryModalUser] = useState<string | null>(null);
+  const [historyModalData, setHistoryModalData] = useState<any>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  // [新增] 異常警示日期狀態
+  const [statsDate, setStatsDate] = useState(() => {
+     return new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  });
+  const [dailyRecords, setDailyRecords] = useState<any[]>([]); // 儲存特定日期的打卡紀錄
 
   useEffect(() => {
     fetchAllData();
+    api.adminGetSheetList().then(res => {
+        if(res.success && res.list.length > 0) {
+            setSheetList(res.list);
+            setExportSheet(res.list[0].name);
+        }
+    });
   }, []);
+
+  // [新增] 當日期改變時，重新抓取該日期的紀錄
+  useEffect(() => {
+    fetchDailyRecords(statsDate);
+  }, [statsDate]);
+
+  // 切換主頁籤時重置子頁籤
+  useEffect(() => {
+    if (mainTab === 'admin') setSubTab('staff');
+    if (mainTab === 'others') setSubTab('line');
+  }, [mainTab]);
 
   const fetchAllData = async (showLoading = false) => {
     if (showLoading) { setBlockText("資料同步中..."); setIsBlocking(true); } 
-    else setIsFetching(true); 
-
     const res = await api.adminGetData('all');
-    
     if (showLoading) setIsBlocking(false);
-    else setIsFetching(false);
 
     if (res.success && res.allData) {
       setAllData(res.allData);
       localStorage.setItem('admin_cache_all', JSON.stringify(res.allData));
-    } else {
-      if (showLoading) onAlert("資料載入失敗");
     }
   };
 
-  const handleDownloadExcel = async (sheetName: string) => {
-    setShowExport(false);
-    setBlockText(`正在生成報表：${sheetName}...`);
-    setIsBlocking(true);
-    
-    try {
-      const res = await api.adminDownloadExcel(adminName, sheetName);
-      if (res.success && res.url) {
-        window.open(res.url, '_blank');
-        onAlert("✅ 報表已生成，正在下載...");
+  // [新增] 抓取單日紀錄
+  const fetchDailyRecords = async (date: string) => {
+     const res = await api.adminGetDailyRecords(date);
+     if (res.success) {
+        setDailyRecords(res.list);
+     }
+  };
+
+  // [新增] 開啟員工歷史紀錄
+  const openStaffHistory = async (targetName: string) => {
+      setHistoryModalUser(targetName);
+      setHistoryLoading(true);
+      setHistoryModalData(null);
+      
+      const res = await api.adminGetStaffHistory(targetName);
+      setHistoryLoading(false);
+      
+      if (res.success) {
+          setHistoryModalData(res.data);
       } else {
-        onAlert(res.message || "下載失敗");
+          onAlert("無法讀取紀錄");
+          setHistoryModalUser(null);
       }
-    } catch (e) {
-      onAlert("發生錯誤");
-    } finally {
-      setIsBlocking(false);
-    }
   };
 
-  const handleAddLocation = async () => {
-    if (!newLoc.name || !newLoc.lat || !newLoc.lng) return onAlert("請填寫完整資訊");
-    setBlockText("新增中...");
-    setIsBlocking(true);
-    const res = await api.adminUpdateLocation({ ...newLoc, op: 'add', adminName });
-    setIsBlocking(false);
-    if (res.success) {
-      onAlert("地點新增成功！");
-      setNewLoc({ name: '', lat: '', lng: '', radius: '500' });
-      fetchAllData(false); 
-    } else { onAlert("新增失敗"); }
-  };
+  // --- Logic Helpers ---
+  // [修改] 異常警示邏輯：改用 dailyRecords + 排除特定班別
+  const getDailyStats = useMemo(() => {
+    // 如果還沒載入班別或員工資料，先回傳空
+    if (!allData.staff || !allData.shift) return { late: [], early: [] };
+    
+    // 使用從後端抓回來的 dailyRecords (特定日期)，而不是 allData.record (最近100筆)
+    const recordsToAnalyze = dailyRecords;
+    
+    const staffShiftMap = new Map();
+    allData.staff.list.forEach((s: any[]) => staffShiftMap.set(s[0], s[7])); // index 7 is shift
 
-  const handleAddShift = async () => {
-    if (!newShift.name || !newShift.start || !newShift.end) return onAlert("請填寫完整資訊");
-    setBlockText("新增班別中...");
-    setIsBlocking(true);
-    const res = await api.adminUpdateShift({ ...newShift, op: 'add', adminName });
-    setIsBlocking(false);
-    if (res.success) {
-      onAlert("班別新增成功！");
-      setNewShift({ name: '', start: '09:00', end: '18:00' });
-      fetchAllData(false); 
-    } else { onAlert("新增失敗"); }
-  };
+    const shiftTimeMap = new Map();
+    allData.shift.list.forEach((s: any[]) => shiftTimeMap.set(s[0], { start: s[1], end: s[2] }));
 
-  const handleDeleteShift = (name: string) => {
-    onConfirm(`確定要刪除班別 [${name}] 嗎？`, async () => {
-        setBlockText("刪除中...");
-        setIsBlocking(true);
-        const res = await api.adminUpdateShift({ op: 'delete', targetName: name, adminName });
-        setIsBlocking(false);
-        if(res.success) { onAlert("刪除成功"); fetchAllData(false); }
-        else { onAlert(res.message); }
+    const lateList: any[] = [];
+    const earlyList: any[] = [];
+    const personRecords: {[key:string]: {in?: string, out?: string}} = {};
+
+    recordsToAnalyze.forEach((r: any[]) => {
+       const name = r[3], time = r[2], type = r[4];
+       if(!personRecords[name]) personRecords[name] = {};
+       if(type === '上班') { if(!personRecords[name].in || time < personRecords[name].in) personRecords[name].in = time; } 
+       else if(type === '下班') { if(!personRecords[name].out || time > personRecords[name].out) personRecords[name].out = time; }
     });
+
+    Object.keys(personRecords).forEach(name => {
+        const shiftName = staffShiftMap.get(name);
+        
+        // [修改] 排除 "大夜班" 和 "小夜/假日班"
+        if (shiftName === "大夜班" || shiftName === "小夜/假日班") return;
+
+        const shift = shiftTimeMap.get(shiftName);
+        const rec = personRecords[name];
+        if (shift) {
+            // 判斷遲到 (上班時間 > 班表時間)
+            if (rec.in && shift.start && rec.in > (shift.start + ":59")) lateList.push({ name, time: rec.in, shift: shift.start });
+            // 判斷早退 (下班時間 < 班表時間)
+            if (rec.out && shift.end && rec.out < shift.end) earlyList.push({ name, time: rec.out, shift: shift.end });
+        }
+    });
+    return { late: lateList, early: earlyList };
+  }, [allData, dailyRecords]);
+
+  // --- Actions ---
+  const handleAction = async (taskName: string, apiCall: Promise<any>) => {
+      setBlockText(taskName); setIsBlocking(true);
+      const res = await apiCall;
+      setIsBlocking(false);
+      if(res.success) { onAlert("執行成功"); fetchAllData(false); return true; }
+      else { onAlert(res.message || "失敗"); return false; }
   };
 
+  const handleUnbindStaff = (name: string) => onConfirm(`解除 [${name}] 綁定？`, () => handleAction("解綁中...", api.adminUpdateStaff({ op: 'unbind', targetName: name, adminName })));
+  const handleKickStaff = (name: string) => onConfirm(`強制登出 [${name}]？`, () => handleAction("執行中...", api.adminUpdateStaff({ op: 'kick', targetName: name, adminName })));
+  const handleUnlockStaff = (name: string) => onConfirm(`解除 [${name}] 鎖定？`, () => handleAction("解鎖中...", api.adminUnlockStaff(name, adminName)));
+  const handleDeleteStaff = () => { if(editingStaff) onConfirm(`刪除員工 [${editingStaff[0]}]？`, async () => { if(await handleAction("刪除中...", api.adminUpdateStaff({ op: 'delete', targetName: editingStaff[0], adminName }))) setEditingStaff(null); }); };
   const handleSaveStaff = async () => {
     if (!staffForm.name || !staffForm.password) return onAlert("姓名與密碼必填");
-    setBlockText("儲存中...");
-    setIsBlocking(true);
-    const op = isAddingStaff ? 'add' : 'edit';
-    const payload = { op, adminName, oldName: editingStaff ? editingStaff[0] : null, newData: staffForm };
-    const res = await api.adminUpdateStaff(payload);
-    setIsBlocking(false);
-    if (res.success) {
-      onAlert(isAddingStaff ? "新增成功" : "更新成功");
-      setIsAddingStaff(false);
-      setEditingStaff(null);
-      fetchAllData(false); 
-    } else { onAlert(res.message); }
-  };
-
-  const handleDeleteStaff = (name: string) => {
-    onConfirm(`確定要刪除員工 [${name}] 嗎？此動作無法復原。`, async () => {
-      setBlockText("刪除中...");
-      setIsBlocking(true);
-      const res = await api.adminUpdateStaff({ op: 'delete', targetName: name, adminName });
-      setIsBlocking(false);
-      if (res.success) { onAlert("刪除成功"); fetchAllData(false); } 
-      else { onAlert(res.message); }
-    });
-  };
-
-  const handleUnlockStaff = (name: string) => {
-    onConfirm(`確定要解除 [${name}] 的鎖定狀態嗎？`, async () => {
-      setBlockText("解鎖中...");
-      setIsBlocking(true);
-      const res = await api.adminUnlockStaff(name, adminName);
-      setIsBlocking(false);
-      if (res.success) { onAlert("解鎖成功"); fetchAllData(false); }
-      else { onAlert(res.message); }
-    });
-  };
-
-  const handleUnbindStaff = (name: string) => {
-    onConfirm(`確定要解除 [${name}] 的裝置綁定嗎？`, async () => {
-      setBlockText("解綁中...");
-      setIsBlocking(true);
-      const res = await api.adminUpdateStaff({ op: 'unbind', targetName: name, adminName });
-      setIsBlocking(false);
-      if (res.success) { onAlert("解綁成功！"); fetchAllData(false); }
-      else { onAlert(res.message); }
-    });
-  };
-
-  // [新增] 強制登出處理
-  const handleKickStaff = (name: string) => {
-    onConfirm(`⚠️ 確定要將 [${name}] 強制登出嗎？\n\n該員工下次操作時將被迫登出。`, async () => {
-      setBlockText("執行中...");
-      setIsBlocking(true);
-      const res = await api.adminUpdateStaff({ op: 'kick', targetName: name, adminName });
-      setIsBlocking(false);
-      if (res.success) { onAlert("✅ 已執行強制登出指令。"); fetchAllData(false); }
-      else { onAlert(res.message); }
-    });
-  };
-
-  const openEditStaff = (row: any[]) => {
-    setStaffForm({ 
-        name: row[0], 
-        password: row[1], 
-        lineId: row[2], 
-        needReset: row[3], 
-        allowRemote: row[4],
-        shift: row[7] || "" 
-    });
-    setEditingStaff(row);
-    setIsAddingStaff(false);
-  };
-
-  const openAddStaff = () => {
-    setStaffForm({ name: '', password: '123', lineId: '', needReset: 'TRUE', allowRemote: 'FALSE', shift: '' });
-    setIsAddingStaff(true);
-    setEditingStaff(null);
-  };
-
-  const currentData = allData[activeTab] || { headers: [], list: [] };
-
-  const tabs = [
-    { id: 'record', label: '打卡紀錄', icon: <ClipboardList size={18} /> },
-    { id: 'staff', label: '員工管理', icon: <Users size={18} /> },
-    { id: 'shift', label: '班別設定', icon: <Clock size={18} /> },
-    { id: 'line', label: 'LINE ID', icon: <MessageSquare size={18} /> },
-    { id: 'location', label: '地點設置', icon: <MapPin size={18} /> },
-    { id: 'log', label: '操作紀錄', icon: <FileText size={18} /> },
-  ];
-
-  const getCellStyle = (headerName: string) => {
-    if (!headerName) return "max-w-[150px] truncate";
-    if (headerName.includes("時間戳記") || headerName.includes("User ID") || headerName.includes("GPS") || headerName.includes("時間") || headerName.includes("登出")) {
-      return "whitespace-nowrap min-w-fit"; 
+    if (staffForm.password !== '******') {
+       if (!/^[1-9]\d{3,}$/.test(staffForm.password)) {
+          return onAlert("密碼格式錯誤：需為至少 4 位數字，且開頭不能為 0");
+       }
     }
-    return "max-w-[150px] truncate";
+    if(await handleAction("儲存中...", api.adminUpdateStaff({ op: isAddingStaff ? 'add' : 'edit', adminName, oldName: editingStaff ? editingStaff[0] : null, newData: staffForm }))) { setIsAddingStaff(false); setEditingStaff(null); }
   };
+  const handleSaveLocation = async () => {
+    if (!newLoc.name || !newLoc.lat) return onAlert("請填寫資訊");
+    
+    const op = editingLoc ? 'edit' : 'add';
+    const actionName = editingLoc ? "更新中..." : "新增中...";
+    const payload = { ...newLoc, op, adminName, oldName: editingLoc ? editingLoc[0] : null };
+
+    if(await handleAction(actionName, api.adminUpdateLocation(payload))) {
+        setNewLoc({name:'', lat:'', lng:'', radius:'500', ip:''});
+        setEditingLoc(null); // 重置編輯狀態
+    }
+  };
+  // 順手補上地點刪除的前端串接
+  const handleDeleteLocation = (name: string) => onConfirm(`確定刪除地點 [${name}]？`, () => handleAction("刪除中...", api.adminUpdateLocation({ op: 'delete', targetName: name, adminName })));
+
+  const handleAddShift = async () => {
+    if (!newShift.name || !newShift.start || !newShift.end) return onAlert("請填寫資訊");
+    if(await handleAction("新增中...", api.adminUpdateShift({ ...newShift, op: 'add', adminName }))) setNewShift({ name: '', start: '09:00', end: '18:00' });
+  };
+  const handleDeleteShift = (name: string) => onConfirm(`確定刪除班別 [${name}]？`, () => handleAction("刪除中...", api.adminUpdateShift({ op: 'delete', targetName: name, adminName })));
+  const handleExport = async () => {
+    if(!exportSheet) return;
+    setBlockText(`生成報表：${exportSheet}...`); setIsBlocking(true);
+    try {
+      const res = await api.adminDownloadExcel(adminName, exportSheet);
+      if (res.success && res.url) { window.open(res.url, '_blank'); onAlert("✅ 報表已下載..."); }
+      else onAlert(res.message || "下載失敗");
+    } catch(e) { onAlert("發生錯誤"); } finally { setIsBlocking(false); }
+  };
+
+  const openAddStaff = () => { setStaffForm({ name: '', password: '123', lineId: '', needReset: 'TRUE', allowRemote: 'FALSE', shift: '' }); setIsAddingStaff(true); setEditingStaff(null); };
+  const openEditStaff = (row: any[]) => { setStaffForm({ name: row[0], password: row[1], lineId: row[2], needReset: row[3], allowRemote: row[4], shift: row[7] || "" }); setEditingStaff(row); setIsAddingStaff(false); };
+
+  const staffList = allData.staff?.list || [];
+  const locList = allData.location?.list || [];
+  const shiftList = allData.shift?.list || [];
+  const recordList = allData.record?.list || [];
+  const lineList = allData.line?.list || [];
+  const logList = allData.log?.list || [];
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
+    <div className="min-h-screen bg-[#0f172a] text-slate-200 font-sans flex flex-col md:flex-row transition-colors duration-300">
       {isBlocking && <LoadingOverlay text={blockText} />}
-      
-      <ExportModal isOpen={showExport} onClose={() => setShowExport(false)} onConfirm={handleDownloadExcel} adminName={adminName} />
 
-      <div className="bg-gray-800 text-white p-4 shadow-md flex justify-between items-center sticky top-0 z-10">
-        <h1 className="text-lg font-bold flex items-center gap-2">🛡️ 管理員後台 <span className="text-xs bg-gray-700 px-2 py-1 rounded text-gray-300">{adminName}</span></h1>
-        <div className="flex items-center gap-2">
-          {isFetching && <div className="text-xs text-green-400 flex items-center gap-1"><RefreshCw size={12} className="animate-spin"/> 背景同步中...</div>}
-          <button onClick={() => setShowExport(true)} className="bg-green-600 p-2 rounded-lg hover:bg-green-500 text-sm flex items-center gap-1 font-bold shadow-sm transition active:scale-95" title="下載打卡報表"><FileSpreadsheet size={16} /> 匯出 Excel</button>
-          <button onClick={() => fetchAllData(true)} className="bg-gray-700 p-2 rounded-lg hover:bg-gray-600 text-sm flex items-center gap-1" title="強制刷新"><RefreshCw size={16} /></button>
-          <button onClick={onBack} className="bg-gray-700 p-2 rounded-lg hover:bg-gray-600 text-sm flex items-center gap-1"><LogOut size={16} /> 返回</button>
-        </div>
+      {/* ======================= */}
+      {/* 1. SIDEBAR (Desktop Only) */}
+      {/* ======================= */}
+      <div className="hidden md:flex w-64 flex-col fixed inset-y-0 z-50 bg-[#0f172a] border-r border-slate-800">
+         <div className="p-6 flex items-center gap-3">
+             <div className="bg-[#00bda4] size-10 rounded-xl flex items-center justify-center text-white shadow-lg shadow-[#00bda4]/20">
+                <ShieldCheck size={24} />
+             </div>
+             <div>
+                <h2 className="text-lg font-bold leading-tight text-white">管理控制中心</h2>
+                <p className="text-[10px] uppercase tracking-widest text-[#00bda4] font-bold">Yiheng Tech</p>
+             </div>
+         </div>
+
+         <div className="flex-1 px-4 py-6 space-y-2">
+             <button onClick={() => setMainTab('admin')} className={`w-full flex items-center gap-3 p-3 rounded-xl font-bold transition-all ${mainTab === 'admin' ? 'bg-[#1e293b] text-[#00bda4] shadow-md' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300'}`}>
+                <LayoutDashboard size={20} /> 管理設定
+             </button>
+             <button onClick={() => setMainTab('history')} className={`w-full flex items-center gap-3 p-3 rounded-xl font-bold transition-all ${mainTab === 'history' ? 'bg-[#1e293b] text-[#00bda4] shadow-md' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300'}`}>
+                <History size={20} /> 打卡紀錄
+             </button>
+             <button onClick={() => setMainTab('others')} className={`w-full flex items-center gap-3 p-3 rounded-xl font-bold transition-all ${mainTab === 'others' ? 'bg-[#1e293b] text-[#00bda4] shadow-md' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300'}`}>
+                <Menu size={20} /> 其他功能
+             </button>
+         </div>
+
+         <div className="p-4 border-t border-slate-800">
+             <button onClick={onBack} className="w-full flex items-center gap-3 p-3 rounded-xl font-bold text-slate-500 hover:bg-slate-800 hover:text-white transition-all">
+                <Home size={20} /> 返回打卡頁
+             </button>
+         </div>
       </div>
 
-      <div className="bg-white shadow p-2 flex overflow-x-auto gap-2 sticky top-16 z-10">
-        {tabs.map(tab => (
-          <button key={tab.id} onClick={() => { setActiveTab(tab.id as any); setIsAddingStaff(false); setEditingStaff(null); }} className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-bold whitespace-nowrap transition-colors ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>
-            {tab.icon} {tab.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex-1 p-4 overflow-auto">
-        <div className="bg-white rounded-2xl shadow overflow-hidden">
+      {/* ======================= */}
+      {/* 2. MAIN CONTENT WRAPPER */}
+      {/* ======================= */}
+      <div className="flex-1 md:pl-64 flex flex-col min-h-screen">
           
-          {/* Staff Tab Header */}
-          {activeTab === 'staff' && (
-            <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
-              <span className="text-sm text-gray-500 font-bold">員工列表</span>
-              <button onClick={openAddStaff} className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-1 hover:bg-green-700"><Plus size={16}/> 新增</button>
-            </div>
-          )}
+          {/* Top Bar (Mobile Only) */}
+          <div className="md:hidden sticky top-0 z-40 bg-[#0f172a]/95 backdrop-blur-md border-b border-slate-800">
+             <div className="flex items-center p-4 gap-3">
+                 <div className="bg-[#00bda4] size-10 rounded-xl flex items-center justify-center text-white shadow-lg">
+                    <ShieldCheck size={24} />
+                 </div>
+                 <div>
+                    <h2 className="text-lg font-bold leading-tight text-white">管理控制中心</h2>
+                    <p className="text-[10px] uppercase tracking-widest text-[#00bda4] font-bold">Yiheng Tech</p>
+                 </div>
+             </div>
+          </div>
 
-          {/* Staff Edit Form */}
-          {(isAddingStaff || editingStaff) && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-                  <div className="flex justify-between items-center mb-6 border-b pb-4">
-                     <h3 className="font-bold text-xl text-gray-800 flex items-center gap-2">
-                       {isAddingStaff ? 
-                         <div className="bg-green-100 p-2 rounded-full text-green-600"><Plus size={24}/></div> : 
-                         <div className="bg-blue-100 p-2 rounded-full text-blue-600"><Edit2 size={24}/></div>
-                       }
-                       {isAddingStaff ? "新增員工" : "編輯員工"}
-                     </h3>
-                     <button onClick={() => { setIsAddingStaff(false); setEditingStaff(null); }} className="text-gray-400 hover:text-gray-600 transition p-2 hover:bg-gray-100 rounded-full">
-                       <X size={24} />
+          {/* Sub-Nav Pills */}
+          <div className="bg-[#0f172a] sticky top-[72px] md:top-0 z-30 pt-4 pb-2 px-4 md:px-8 md:pt-8 md:pb-6 border-b border-slate-800 md:bg-[#0f172a]/95 backdrop-blur">
+             <div className="flex justify-between items-center mb-4 md:mb-6">
+                <h3 className="text-2xl font-bold text-white hidden md:block">
+                    {mainTab === 'admin' ? '管理設定' : mainTab === 'history' ? '打卡紀錄' : '其他功能'}
+                </h3>
+                <div className="flex items-center gap-3">
+                   <span className="text-slate-500 text-sm font-bold hidden md:block">管理員：{adminName}</span>
+                   <button onClick={() => fetchAllData(true)} className="p-2 bg-[#1e293b] rounded-lg text-slate-400 hover:text-white border border-slate-700 hover:border-[#00bda4] transition">
+                       <Loader2 size={18} />
+                   </button>
+                </div>
+             </div>
+
+             {/* Pills Container */}
+             {mainTab === 'admin' && (
+                <div className="flex gap-3 overflow-x-auto no-scrollbar">
+                    {[['staff', '員工', Users], ['location', '地點', MapPin], ['shift', '班別', Clock], ['export', '匯出', Share]].map(([key, label, Icon]: any) => (
+                        <button key={key} onClick={() => setSubTab(key)} className={`flex h-10 shrink-0 items-center justify-center gap-x-2 rounded-full px-5 transition-all whitespace-nowrap ${subTab === key ? 'bg-[#00bda4] text-white shadow-lg shadow-[#00bda4]/20' : 'bg-[#1e293b] text-slate-400 border border-slate-700 hover:bg-slate-700'}`}>
+                           <Icon size={16} /> <span className="text-sm font-bold">{label}</span>
+                        </button>
+                    ))}
+                </div>
+             )}
+             {mainTab === 'others' && (
+                 <div className="flex gap-3 overflow-x-auto no-scrollbar">
+                     <button onClick={() => setSubTab('line')} className={`flex h-10 shrink-0 items-center justify-center gap-x-2 rounded-full px-5 transition-all whitespace-nowrap ${subTab === 'line' ? 'bg-[#00bda4] text-white shadow-lg' : 'bg-[#1e293b] text-slate-400 border border-slate-700 hover:bg-slate-700'}`}>
+                        <MessageSquare size={16} /> <span className="text-sm font-bold">Line ID</span>
                      </button>
-                  </div>
+                     <button onClick={() => setSubTab('log')} className={`flex h-10 shrink-0 items-center justify-center gap-x-2 rounded-full px-5 transition-all whitespace-nowrap ${subTab === 'log' ? 'bg-[#00bda4] text-white shadow-lg' : 'bg-[#1e293b] text-slate-400 border border-slate-700 hover:bg-slate-700'}`}>
+                        <FileText size={16} /> <span className="text-sm font-bold">操作紀錄</span>
+                     </button>
+                 </div>
+             )}
+          </div>
 
-                  <div className="grid grid-cols-1 gap-4 mb-6">
-                    <div>
-                        <label className="text-sm font-bold text-gray-500 mb-1 block">姓名</label>
-                        <input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition" 
-                               value={staffForm.name} 
-                               onChange={e=>setStaffForm({...staffForm, name: e.target.value})} 
-                               placeholder="輸入姓名" />
-                    </div>
-                    <div>
-                        <label className="text-sm font-bold text-gray-500 mb-1 block">密碼</label>
-                        <input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition" 
-                               value={staffForm.password} 
-                               onChange={e=>setStaffForm({...staffForm, password: e.target.value})} 
-                               placeholder={!isAddingStaff ? "不修改請留空 (******)" : "預設密碼"} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-sm font-bold text-gray-500 mb-1 block">LINE ID</label>
-                            <input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition" 
-                                   value={staffForm.lineId} 
-                                   onChange={e=>setStaffForm({...staffForm, lineId: e.target.value})} />
-                        </div>
-                        <div>
-                            <label className="text-sm font-bold text-gray-500 mb-1 block">班別</label>
-                            <input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition" 
-                                   value={staffForm.shift} 
-                                   onChange={e=>setStaffForm({...staffForm, shift: e.target.value})} 
-                                   placeholder="例如：早班" />
+          {/* Content Body */}
+          <div className="p-4 md:p-8 flex flex-col gap-6 pb-24 md:pb-8 max-w-7xl mx-auto w-full">
+            
+            {/* [修改] 異常警示卡片：加入日期選擇功能 */}
+            {mainTab === 'admin' && (
+                <div className="w-full md:max-w-2xl mx-auto bg-[#FF9800]/10 rounded-2xl p-6 border border-[#FF9800]/20 relative overflow-hidden shadow-md shadow-black/20">
+                    <div className="flex justify-center mb-4 relative z-10">
+                        {/* [優化] 改用 onClick 直接觸發 showPicker，解決電腦版只能按邊邊的問題 */}
+                        <div 
+                            className="relative cursor-pointer group flex items-center justify-center"
+                            onClick={() => {
+                                // 抓取下方的 input 並強制開啟日曆
+                                const input = document.getElementById('stats-date-picker') as HTMLInputElement;
+                                if (input && 'showPicker' in input) {
+                                    (input as any).showPicker();
+                                } else {
+                                    input?.focus(); // 舊瀏覽器備案
+                                }
+                            }}
+                        >
+                            <div className="text-[#FF9800] text-xs font-bold uppercase tracking-widest flex items-center gap-2 bg-[#FF9800]/10 px-4 py-2 rounded-full border border-[#FF9800]/20 group-hover:bg-[#FF9800]/20 transition select-none">
+                                <AlertTriangle size={14} /> 
+                                <span>
+                                  異常警示 ({statsDate}) 
+                                  <span className="ml-1 opacity-70">
+                                    {new Date(statsDate).toLocaleDateString('zh-TW', { weekday: 'short' })}
+                                  </span>
+                                </span>
+                                <Edit2 size={12} className="opacity-50" />
+                            </div>
+                            <input 
+                                id="stats-date-picker"
+                                type="date" 
+                                className="absolute inset-0 w-full h-full opacity-0 pointer-events-none" 
+                                value={statsDate}
+                                onChange={(e) => setStatsDate(e.target.value)}
+                            />
                         </div>
                     </div>
                     
-                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                      <label className="text-sm font-bold text-gray-500 mb-3 block">帳號權限設定</label>
-                      <div className="flex flex-col gap-3">
-                        <label className="flex items-center gap-3 cursor-pointer group">
-                            <input type="checkbox" className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" 
-                                   checked={staffForm.needReset === 'TRUE'} 
-                                   onChange={e=>setStaffForm({...staffForm, needReset: e.target.checked?'TRUE':'FALSE'})} /> 
-                            <span className="text-gray-700 font-medium group-hover:text-blue-600 transition">下次登入需重設密碼</span>
-                        </label>
-                        <label className="flex items-center gap-3 cursor-pointer group">
-                            <input type="checkbox" className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" 
-                                   checked={staffForm.allowRemote === 'TRUE'} 
-                                   onChange={e=>setStaffForm({...staffForm, allowRemote: e.target.checked?'TRUE':'FALSE'})} /> 
-                            <span className="text-gray-700 font-medium group-hover:text-blue-600 transition">允許遠端打卡 (免 GPS 檢查)</span>
-                        </label>
-                      </div>
+                    <div className="flex items-center justify-around w-full relative z-10">
+                        <button onClick={() => setStatModal({title: `遲到名單 (${statsDate})`, list: getDailyStats.late})} className="flex-1 flex flex-col items-center justify-center active:opacity-70 transition group">
+                            <span className="text-4xl font-black text-[#FF9800] mb-1 group-hover:scale-110 transition-transform drop-shadow-sm">{getDailyStats.late.length}</span>
+                            <span className="text-xs font-bold text-[#FF9800]/70">遲到人數</span>
+                        </button>
+                        <div className="w-[1px] h-10 bg-[#FF9800]/20"></div>
+                        <button onClick={() => setStatModal({title: `早退名單 (${statsDate})`, list: getDailyStats.early})} className="flex-1 flex flex-col items-center justify-center active:opacity-70 transition group">
+                            <span className="text-4xl font-black text-[#FF9800] mb-1 group-hover:scale-110 transition-transform drop-shadow-sm">{getDailyStats.early.length}</span>
+                            <span className="text-xs font-bold text-[#FF9800]/70">早退人數</span>
+                        </button>
                     </div>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <button onClick={() => { setIsAddingStaff(false); setEditingStaff(null); }} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition">取消</button>
-                    <button onClick={handleSaveStaff} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition flex items-center justify-center gap-2"><Save size={18}/> 儲存變更</button>
-                  </div>
-
                 </div>
-              </div>
-          )}
+            )}
 
-          {/* Location Tab Header */}
-          {activeTab === 'location' && (
-            <div className="p-4 bg-blue-50 border-b border-blue-100 grid gap-3">
-              <h3 className="text-sm font-bold text-blue-800 flex items-center gap-2"><Plus size={16}/> 新增地點</h3>
-              {/* [修改] 調整 Grid 佈局以容納 IP 輸入框 */}
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                <input placeholder="地點名稱" className="p-2 border rounded" value={newLoc.name} onChange={e=>setNewLoc({...newLoc, name: e.target.value})} />
-                <input placeholder="誤差(m)" className="p-2 border rounded" value={newLoc.radius} onChange={e=>setNewLoc({...newLoc, radius: e.target.value})} />
-                <input placeholder="緯度" className="p-2 border rounded" value={newLoc.lat} onChange={e=>setNewLoc({...newLoc, lat: e.target.value})} />
-                <input placeholder="經度" className="p-2 border rounded" value={newLoc.lng} onChange={e=>setNewLoc({...newLoc, lng: e.target.value})} />
-                {/* [新增] IP 輸入框 */}
-                <input placeholder="允許IP (選填)" className="p-2 border rounded" value={newLoc.ip} onChange={e=>setNewLoc({...newLoc, ip: e.target.value})} />
-              </div>
-              <button onClick={handleAddLocation} className="bg-blue-600 text-white py-2 rounded-lg font-bold hover:bg-blue-700 w-full md:w-auto">確認新增</button>
-            </div>
-          )}
+            {/* STAFF LIST */}
+            {mainTab === 'admin' && subTab === 'staff' && (
+                <>
+                    <div className="flex justify-between items-center px-1">
+                        <h3 className="font-bold text-slate-300">員工名單 ({staffList.length})</h3>
+                        <button onClick={openAddStaff} className="text-[#00bda4] text-sm font-bold flex items-center gap-1 bg-[#1e293b] px-4 py-2 rounded-full border border-slate-700 shadow-sm active:scale-95 transition hover:bg-slate-700 hover:border-[#00bda4]"><Plus size={16}/> 新增員工</button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {staffList.map((row: any[], i: number) => {
+                            const isLocked = row[5] === "🔒已鎖定";
+                            return (
+                                <div key={i} 
+                                    // [修改] 點擊卡片 -> 開啟歷史紀錄
+                                    onClick={() => openStaffHistory(row[0])} 
+                                    className="flex flex-col gap-3 rounded-2xl bg-[#1e293b] p-5 shadow-md shadow-black/10 border border-slate-700 relative overflow-hidden active:scale-[0.99] transition cursor-pointer hover:border-[#00bda4]/50 hover:bg-[#253248]"
+                                >
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex flex-col gap-1 w-full overflow-hidden">
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-xl font-black text-slate-100 tracking-wide">{row[0]}</p>
+                                                {row[7] && <span className="bg-slate-700 px-1.5 py-0.5 rounded text-xs text-slate-300 border border-slate-600 font-bold whitespace-nowrap">{row[7]}</span>}
+                                            </div>
+                                            <p className="text-slate-500 text-xs font-mono font-medium truncate w-full" title={row[2]}>
+                                                ID: {row[2] || "未綁定"}
+                                            </p>
+                                        </div>
+                                        
+                                        <div className="flex flex-col gap-2 items-end">
+                                            {/* 狀態標籤 */}
+                                            <div className={`flex shrink-0 items-center justify-center rounded-full px-2 py-1 border ${isLocked ? 'bg-[#FF9800]/10 text-[#FF9800] border-[#FF9800]/20' : 'bg-green-500/10 text-green-400 border-green-500/20'}`}>
+                                                <span className="text-[10px] font-bold whitespace-nowrap">{isLocked ? '已鎖定' : '正常'}</span>
+                                            </div>
+                                            
+                                            {/* [新增] 鉛筆編輯按鈕 (阻止冒泡) */}
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); openEditStaff(row); }}
+                                                className="bg-blue-500/10 text-blue-400 p-1.5 rounded-lg border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
+                                            >
+                                                <Edit2 size={14} />
+                                            </button>
+                                        </div>
+                                    </div>
 
-          {/* Shift Tab Header */}
-          {activeTab === 'shift' && (
-            <div className="p-4 bg-blue-50 border-b border-blue-100 grid gap-3">
-              <h3 className="text-sm font-bold text-blue-800 flex items-center gap-2"><Plus size={16}/> 新增班別</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <input placeholder="班別名稱 (例如：早班)" className="p-2 border rounded" value={newShift.name} onChange={e=>setNewShift({...newShift, name: e.target.value})} />
-                <input type="time" placeholder="上班時間" className="p-2 border rounded" value={newShift.start} onChange={e=>setNewShift({...newShift, start: e.target.value})} />
-                <input type="time" placeholder="下班時間" className="p-2 border rounded" value={newShift.end} onChange={e=>setNewShift({...newShift, end: e.target.value})} />
-              </div>
-              <button onClick={handleAddShift} className="bg-blue-600 text-white py-2 rounded-lg font-bold hover:bg-blue-700 w-full md:w-auto">確認新增</button>
-            </div>
-          )}
+                                    <div className="h-[1px] bg-slate-700 w-full"></div>
+                                    
+                                    <div className="flex gap-2" onClick={e => e.stopPropagation()}>
+                                        {isLocked ? (
+                                            <button onClick={() => handleUnlockStaff(row[0])} className="flex-1 py-2 bg-[#00bda4]/10 text-[#00bda4] rounded-lg text-xs font-bold flex items-center justify-center gap-1 hover:bg-[#00bda4]/20"><Unlock size={14}/> 解鎖</button>
+                                        ) : (
+                                            <button onClick={() => handleUnbindStaff(row[0])} disabled={row[6] !== "📱已綁定"} className="flex-1 py-2 bg-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-30 disabled:text-slate-500 hover:bg-slate-600"><Unlink size={14}/> 解綁</button>
+                                        )}
+                                        <button onClick={() => handleKickStaff(row[0])} className="flex-1 py-2 bg-red-500/10 text-red-400 rounded-lg text-xs font-bold flex items-center justify-center gap-1 hover:bg-red-500/20 border border-transparent hover:border-red-500/30"><UserMinus size={14}/> 踢除</button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </>
+            )}
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
-                <tr>
-                  {currentData.headers.length > 0 ? currentData.headers.map((h: string, i: number) => <th key={i} className="px-4 py-3 whitespace-nowrap bg-gray-100 sticky top-0">{h}</th>) : <th>欄位</th>}
-                  {(activeTab === 'staff' || activeTab === 'shift') && <th className="px-4 py-3 text-right bg-gray-100 sticky top-0">管理</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {currentData.list.length > 0 ? currentData.list.map((row: any[], i: number) => (
-                  <tr key={i} className="hover:bg-gray-50">
-                    {row.map((cell:string, j:number) => (
-                      <td key={j} className={`px-4 py-3 ${getCellStyle(currentData.headers[j])} ${cell==="🔒已鎖定" ? "text-red-600 font-bold bg-red-50" : ""} ${cell==="📱已綁定" ? "text-green-600 font-bold" : ""}`} title={cell}>
-                        {cell}
-                      </td>
-                    ))}
-                    {activeTab === 'staff' && (
-                      <td className="px-4 py-3 flex justify-end gap-2 items-center">
-                         {/* [新增] 強制登出按鈕 */}
-                        <button onClick={()=>handleKickStaff(row[0])} className="p-1.5 bg-yellow-100 text-yellow-600 hover:bg-yellow-200 rounded flex items-center gap-1 text-xs font-bold" title="強制登出"><Ban size={14}/> 踢除</button>
-                        {row.includes("📱已綁定") && (
-                           <button onClick={()=>handleUnbindStaff(row[0])} className="p-1.5 bg-orange-100 text-orange-600 hover:bg-orange-200 rounded flex items-center gap-1 text-xs font-bold" title="解除裝置綁定"><Unlink size={14}/> 解綁</button>
-                        )}
-                        {row.includes("🔒已鎖定") && (
-                           <button onClick={()=>handleUnlockStaff(row[0])} className="p-1.5 bg-red-100 text-red-600 hover:bg-red-200 rounded flex items-center gap-1 text-xs font-bold" title="解鎖"><Unlock size={14}/> 解鎖</button>
-                        )}
-                        <button onClick={()=>openEditStaff(row)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="編輯"><Edit2 size={16}/></button>
-                        <button onClick={()=>handleDeleteStaff(row[0])} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="刪除"><Trash2 size={16}/></button>
-                      </td>
-                    )}
-                    {activeTab === 'shift' && (
-                      <td className="px-4 py-3 flex justify-end gap-2 items-center">
-                        <button onClick={()=>handleDeleteShift(row[0])} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="刪除"><Trash2 size={16}/></button>
-                      </td>
-                    )}
-                  </tr>
-                )) : <tr><td className="p-8 text-center text-gray-400" colSpan={currentData.headers.length + 1}>目前沒有資料</td></tr>}
-              </tbody>
-            </table>
+            {/* Shift List */}
+            {mainTab === 'admin' && subTab === 'shift' && (
+                <>
+                    <div className="bg-[#1e293b] p-6 rounded-2xl shadow-md border border-slate-700 md:max-w-3xl md:mx-auto w-full">
+                        <h4 className="font-bold mb-4 text-slate-300 flex items-center gap-2"><Plus size={16} className="text-[#00bda4]"/> 新增班別</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                            <input placeholder="名稱" value={newShift.name} onChange={e=>setNewShift({...newShift, name: e.target.value})} className="md:col-span-3 p-3 bg-[#334155] text-white placeholder-slate-500 rounded-lg text-sm font-bold outline-none focus:ring-1 focus:ring-[#00bda4]" />
+                            <input type="time" value={newShift.start} onChange={e=>setNewShift({...newShift, start: e.target.value})} className="p-3 bg-[#334155] text-white rounded-lg text-sm font-bold outline-none focus:ring-1 focus:ring-[#00bda4]" />
+                            <span className="hidden md:flex items-center justify-center text-slate-500">至</span>
+                            <input type="time" value={newShift.end} onChange={e=>setNewShift({...newShift, end: e.target.value})} className="p-3 bg-[#334155] text-white rounded-lg text-sm font-bold outline-none focus:ring-1 focus:ring-[#00bda4]" />
+                        </div>
+                        <button onClick={handleAddShift} className="w-full bg-[#00bda4] text-white font-bold py-3 rounded-xl shadow-lg shadow-[#00bda4]/20 hover:bg-[#00a892] active:scale-[0.98]">確認新增</button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {shiftList.map((row: any[], i: number) => (
+                            <div key={i} className="flex justify-between items-center bg-[#1e293b] p-5 rounded-2xl shadow-sm border border-slate-700">
+                                <div>
+                                    <p className="font-extrabold text-slate-200 text-lg">{row[0]}</p>
+                                    <p className="text-xs text-slate-500 font-bold mt-1 bg-slate-800 px-2 py-1 rounded w-fit">{row[1]} - {row[2]}</p>
+                                </div>
+                                <button onClick={() => handleDeleteShift(row[0])} className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20"><Trash2 size={18}/></button>
+                            </div>
+                        ))}
+                    </div>
+                </>
+            )}
+
+            {mainTab === 'admin' && subTab === 'location' && (
+                <>
+                    <div className="bg-[#1e293b] p-6 rounded-2xl shadow-md border border-slate-700 md:max-w-3xl md:mx-auto w-full">
+                        <h4 className="font-bold mb-4 text-slate-300 flex items-center gap-2">
+                           {editingLoc ? <><Edit2 size={16} className="text-blue-400"/> 編輯打卡地點</> : <><Plus size={16} className="text-[#00bda4]"/> 新增打卡地點</>}
+                        </h4>
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                            <input placeholder="名稱" value={newLoc.name} onChange={e=>setNewLoc({...newLoc, name: e.target.value})} className="p-3 bg-[#334155] text-white placeholder-slate-500 rounded-lg text-sm font-bold outline-none focus:ring-1 focus:ring-[#00bda4]" />
+                            <input placeholder="誤差(m)" value={newLoc.radius} onChange={e=>setNewLoc({...newLoc, radius: e.target.value})} className="p-3 bg-[#334155] text-white placeholder-slate-500 rounded-lg text-sm font-bold outline-none focus:ring-1 focus:ring-[#00bda4]" />
+                            <input placeholder="緯度" value={newLoc.lat} onChange={e=>setNewLoc({...newLoc, lat: e.target.value})} className="p-3 bg-[#334155] text-white placeholder-slate-500 rounded-lg text-sm font-bold outline-none focus:ring-1 focus:ring-[#00bda4]" />
+                            <input placeholder="經度" value={newLoc.lng} onChange={e=>setNewLoc({...newLoc, lng: e.target.value})} className="p-3 bg-[#334155] text-white placeholder-slate-500 rounded-lg text-sm font-bold outline-none focus:ring-1 focus:ring-[#00bda4]" />
+                            <input placeholder="IP (選填)" value={newLoc.ip} onChange={e=>setNewLoc({...newLoc, ip: e.target.value})} className="col-span-2 p-3 bg-[#334155] text-white placeholder-slate-500 rounded-lg text-sm font-bold outline-none focus:ring-1 focus:ring-[#00bda4]" />
+                        </div>
+                        <div className="flex gap-2">
+                            {editingLoc && (
+                                <button onClick={() => { setEditingLoc(null); setNewLoc({name:'', lat:'', lng:'', radius:'500', ip:''}); }} className="w-24 bg-slate-700 text-slate-300 font-bold py-3 rounded-xl hover:bg-slate-600">取消</button>
+                            )}
+                            <button onClick={handleSaveLocation} className={`flex-1 font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-[0.98] ${editingLoc ? 'bg-blue-500 text-white shadow-blue-500/20 hover:bg-blue-600' : 'bg-[#00bda4] text-white shadow-[#00bda4]/20 hover:bg-[#00a892]'}`}>
+                                {editingLoc ? <><Save size={18}/> 儲存變更</> : "新增"}
+                            </button>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {locList.map((row: any[], i: number) => (
+                            <div key={i} className="bg-[#1e293b] p-5 rounded-2xl shadow-sm border border-slate-700 flex justify-between items-start group">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                       <p className="font-extrabold text-slate-200 text-lg">{row[0]}</p>
+                                       <span className="text-xs bg-slate-700 px-2 py-1 rounded text-slate-300 font-bold h-fit">{row[3]}m</span>
+                                    </div>
+                                    <p className="text-xs text-slate-500 mt-2 font-mono">{row[1]}, {row[2]}</p>
+                                    {row[4] && <p className="text-xs text-slate-500 mt-1">IP: {row[4]}</p>}
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                     <button onClick={() => { setEditingLoc(row); setNewLoc({name: row[0], lat: row[1], lng: row[2], radius: row[3], ip: row[4] || ''}); window.scrollTo({top:0, behavior:'smooth'}); }} className="p-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500/20">
+                                         <Edit2 size={16}/>
+                                     </button>
+                                     <button onClick={() => handleDeleteLocation(row[0])} className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20">
+                                         <Trash2 size={16}/>
+                                     </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </>
+            )}
+
+            {mainTab === 'admin' && subTab === 'export' && (
+                 <div className="bg-[#1e293b] rounded-2xl p-8 shadow-sm border border-slate-700 text-center mt-4 max-w-lg mx-auto w-full">
+                     <div className="bg-green-500/10 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 text-green-500 border border-green-500/20">
+                        <FileSpreadsheet size={40} />
+                     </div>
+                     <h3 className="text-xl font-bold mb-2 text-white">匯出 Excel</h3>
+                     <p className="text-slate-500 text-sm mb-6">請選擇要匯出的月份工作表</p>
+                     <select value={exportSheet} onChange={(e) => setExportSheet(e.target.value)} className="w-full p-4 bg-[#334155] text-white rounded-xl font-bold outline-none mb-6 text-center border-none cursor-pointer hover:bg-[#475569]">
+                        {sheetList.map(s => <option key={s.name} value={s.name}>{s.label}</option>)}
+                     </select>
+                     <button onClick={handleExport} className="w-full bg-[#00bda4] text-white py-4 rounded-xl font-bold shadow-lg shadow-[#00bda4]/20 flex items-center justify-center gap-2 hover:bg-[#00a892] transition-all active:scale-[0.98]">
+                        <Download size={20} /> 確認下載
+                     </button>
+                 </div>
+            )}
+
+            {/* HISTORY */}
+            {mainTab === 'history' && (
+               <div className="flex flex-col gap-4">
+                   <div className="flex justify-between items-center mb-2 px-1">
+                       <h3 className="font-bold text-slate-300">近期打卡紀錄</h3>
+                   </div>
+                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                       {recordList.map((row: any[], i: number) => {
+                           const isSuccess = row[6]?.includes('成功');
+                           // [修改] 增加判斷「遠端」
+                           let method = '未知';
+                           const note = row[8] || '';
+                           if (note.includes('GPS') && note.includes('IP')) method = 'GPS+IP';
+                           else if (note.includes('GPS')) method = 'GPS';
+                           else if (note.includes('IP')) method = 'IP';
+                           else if (note.includes('遠端')) method = '遠端';
+                           
+                           return (
+                           <div key={i} className="bg-[#1e293b] p-4 rounded-2xl shadow-sm border border-slate-700 flex flex-col gap-2">
+                               <div className="flex justify-between items-start">
+                                  <div className="flex items-center gap-2">
+                                     <span className="font-bold text-slate-200 text-lg">{row[3]}</span>
+                                     <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${row[4] === '上班' ? 'bg-[#00bda4]/10 text-[#00bda4] border-[#00bda4]/20' : 'bg-[#FF9800]/10 text-[#FF9800] border-[#FF9800]/20'}`}>{row[4]}</span>
+                                  </div>
+                                  {/* 成功/失敗 狀態顯示 */}
+                                  <div className={`text-xs font-bold px-2 py-1 rounded flex items-center gap-1 ${isSuccess ? 'bg-slate-800 text-green-400' : 'bg-red-900/20 text-red-400'}`}>
+                                      {isSuccess ? (
+                                          <>{method} 打卡成功</>
+                                      ) : (
+                                          <>{row[6] || '失敗'}</> // 失敗原因
+                                      )}
+                                  </div>
+                               </div>
+                               
+                               <div className="flex justify-between items-end border-t border-slate-700/50 pt-2">
+                                  <p className="text-xs text-slate-400 font-mono">{row[1]} <span className="text-white font-bold text-sm ml-1">{row[2]}</span></p>
+                                  {/* 地點放大顯示 */}
+                                  <div className="flex items-center gap-1 max-w-[60%] justify-end">
+                                      <MapPin size={12} className="text-slate-500 shrink-0"/>
+                                      <p className="text-xs text-slate-300 font-bold truncate">{row[5]}</p>
+                                  </div>
+                               </div>
+                           </div>
+                       )})}
+                   </div>
+               </div>
+            )}
+
+            {/* OTHERS - Line & Log */}
+            {mainTab === 'others' && subTab === 'line' && (
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {lineList.map((row: any[], i: number) => (
+                       <div key={i} className="bg-[#1e293b] p-5 rounded-2xl shadow-sm border border-slate-700">
+                           <div className="flex justify-between mb-2">
+                               <span className="font-bold text-slate-200">{row[1]}</span>
+                               <span className="text-xs text-slate-500">{new Date(row[0]).toLocaleDateString()}</span>
+                           </div>
+                           <p className="text-xs text-slate-400 font-mono bg-[#0f172a] p-3 rounded-lg break-all border border-slate-800">{row[2]}</p>
+                       </div>
+                   ))}
+               </div>
+            )}
+            {mainTab === 'others' && subTab === 'log' && (
+               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  {logList.map((row: any[], i: number) => (
+                       <div key={i} className="bg-[#1e293b] p-4 rounded-2xl shadow-sm border border-slate-700">
+                           <div className="flex justify-between mb-1">
+                               <span className="font-bold text-[#00bda4] text-xs px-2 py-0.5 bg-[#00bda4]/10 rounded border border-[#00bda4]/20">{row[2]}</span>
+                               {/* [修改] 直接顯示字串，解決 Invalid Date 問題 */}
+                               <span className="text-xs text-slate-500">{row[0]}</span>
+                           </div>
+                           <p className="text-sm font-bold text-slate-300 mt-2">{row[3]}</p>
+                           <p className="text-xs text-slate-600 mt-1">Admin: {row[1]}</p>
+                       </div>
+                   ))}
+               </div>
+            )}
+
           </div>
+      </div>
+
+      {/* ======================= */}
+      {/* 3. MOBILE BOTTOM NAV    */}
+      {/* ======================= */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0f172a]/95 backdrop-blur-lg border-t border-slate-800 pb-8 pt-3 px-6 z-50">
+        <div className="flex justify-between items-center max-w-md mx-auto">
+          <button onClick={onBack} className="flex flex-col items-center gap-1 text-slate-500 hover:text-[#00bda4] transition-colors active:scale-95">
+            <Home size={26} strokeWidth={2} />
+            <span className="text-[10px] font-bold">回首頁</span>
+          </button>
+          
+          <button onClick={() => setMainTab('history')} className={`flex flex-col items-center gap-1 transition-colors active:scale-95 ${mainTab === 'history' ? 'text-[#00bda4]' : 'text-slate-500'}`}>
+            <History size={26} strokeWidth={2} />
+            <span className="text-[10px] font-bold">打卡紀錄</span>
+          </button>
+          
+          <button onClick={() => setMainTab('admin')} className={`flex flex-col items-center gap-1 transition-colors active:scale-95 ${mainTab === 'admin' ? 'text-[#00bda4]' : 'text-slate-500'}`}>
+            <div className="relative">
+              <ShieldCheck size={26} strokeWidth={2} />
+              {mainTab === 'admin' && <div className="absolute -top-0.5 -right-0.5 size-2 bg-[#FF9800] rounded-full border-2 border-[#0f172a]"></div>}
+            </div>
+            <span className="text-[10px] font-bold">管理設定</span>
+          </button>
+          
+          <button onClick={() => setMainTab('others')} className={`flex flex-col items-center gap-1 transition-colors active:scale-95 ${mainTab === 'others' ? 'text-[#00bda4]' : 'text-slate-500'}`}>
+            <Menu size={26} strokeWidth={2} />
+            <span className="text-[10px] font-bold">其他</span>
+          </button>
         </div>
       </div>
+
+      {/* ======================= */}
+      {/* 4. MODALS               */}
+      {/* ======================= */}
+      
+      {/* Add/Edit Staff Modal */}
+      {(isAddingStaff || editingStaff) && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in" onClick={() => { setIsAddingStaff(false); setEditingStaff(null); }}>
+            {/* [修改] 阻止冒泡，避免點擊內容時關閉 */}
+            <div className="bg-[#1e293b] w-full sm:max-w-md rounded-t-[2rem] sm:rounded-[2rem] p-6 shadow-2xl animate-in slide-in-from-bottom-4 border border-slate-700" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="font-bold text-xl text-white flex items-center gap-2">
+                        {isAddingStaff ? <div className="bg-[#00bda4]/10 p-2 rounded-full text-[#00bda4]"><Plus size={20}/></div> : <div className="bg-blue-500/10 p-2 rounded-full text-blue-400"><Edit2 size={20}/></div>}
+                        {isAddingStaff ? "新增員工" : "編輯員工"}
+                    </h3>
+                    <button onClick={() => { setIsAddingStaff(false); setEditingStaff(null); }} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={20}/></button>
+                </div>
+                <div className="space-y-4 mb-6">
+                    <div className="grid grid-cols-2 gap-4">
+                        <input value={staffForm.name} onChange={e=>setStaffForm({...staffForm, name: e.target.value})} className="p-3 bg-[#334155] text-white rounded-xl font-bold outline-none placeholder-slate-500 focus:ring-1 focus:ring-[#00bda4]" placeholder="姓名" />
+                        <input value={staffForm.shift} onChange={e=>setStaffForm({...staffForm, shift: e.target.value})} className="p-3 bg-[#334155] text-white rounded-xl font-bold outline-none placeholder-slate-500 focus:ring-1 focus:ring-[#00bda4]" placeholder="班別 (例如: 早班)" />
+                    </div>
+                    <input value={staffForm.password} onChange={e=>setStaffForm({...staffForm, password: e.target.value})} className="w-full p-3 bg-[#334155] text-white rounded-xl font-bold outline-none placeholder-slate-500 focus:ring-1 focus:ring-[#00bda4]" placeholder="密碼" />
+                    <input value={staffForm.lineId} onChange={e=>setStaffForm({...staffForm, lineId: e.target.value})} className="w-full p-3 bg-[#334155] text-white rounded-xl font-bold outline-none placeholder-slate-500 focus:ring-1 focus:ring-[#00bda4]" placeholder="Line ID (選填)" />
+                    <div className="flex gap-2">
+                         <label className="flex-1 flex items-center gap-2 bg-[#334155] p-3 rounded-xl cursor-pointer hover:bg-slate-700">
+                            <input type="checkbox" checked={staffForm.needReset === 'TRUE'} onChange={e=>setStaffForm({...staffForm, needReset: e.target.checked?'TRUE':'FALSE'})} className="rounded text-[#00bda4] focus:ring-0 bg-slate-800 border-slate-600" />
+                            <span className="text-xs font-bold text-slate-300">重設密碼</span>
+                         </label>
+                         <label className="flex-1 flex items-center gap-2 bg-[#334155] p-3 rounded-xl cursor-pointer hover:bg-slate-700">
+                            <input type="checkbox" checked={staffForm.allowRemote === 'TRUE'} onChange={e=>setStaffForm({...staffForm, allowRemote: e.target.checked?'TRUE':'FALSE'})} className="rounded text-[#00bda4] focus:ring-0 bg-slate-800 border-slate-600" />
+                            <span className="text-xs font-bold text-slate-300">遠端打卡</span>
+                         </label>
+                    </div>
+                </div>
+                <div className="flex gap-3">
+                    {!isAddingStaff && <button onClick={handleDeleteStaff} className="p-4 bg-red-500/10 text-red-400 rounded-xl hover:bg-red-500/20"><Trash2 size={20}/></button>}
+                    <button onClick={handleSaveStaff} className="flex-1 bg-[#00bda4] text-white py-4 rounded-xl font-bold text-lg shadow-xl shadow-[#00bda4]/20 flex items-center justify-center gap-2 hover:bg-[#00a892]"><Save size={20}/> 儲存</button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* Stats Detail Modal */}
+      {statModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in" onClick={() => setStatModal(null)}>
+             <div className="bg-[#1e293b] w-full max-w-sm rounded-[2rem] p-6 shadow-2xl max-h-[70vh] flex flex-col border border-slate-700" onClick={e => e.stopPropagation()}>
+                 <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-4">
+                     <h3 className="font-bold text-lg text-white">{statModal.title}</h3>
+                     <button onClick={() => setStatModal(null)} className="bg-slate-800 text-slate-400 p-2 rounded-full hover:text-white"><X size={16}/></button>
+                 </div>
+                 <div className="overflow-y-auto flex-1 space-y-2">
+                     {statModal.list.length === 0 ? <p className="text-center text-slate-500 py-4">無資料</p> : 
+                        statModal.list.map((item, i) => (
+                           <div key={i} className="flex justify-between items-center bg-[#334155] p-3 rounded-xl border border-slate-700">
+                               <span className="font-bold text-slate-200">{item.name}</span>
+                               <span className="text-xs font-bold text-red-400">{item.time} (班表: {item.shift})</span>
+                           </div>
+                        ))
+                     }
+                 </div>
+             </div>
+        </div>
+      )}
+
+      {/* 員工歷史紀錄 Modal */}
+      {historyModalUser && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in" onClick={() => setHistoryModalUser(null)}>
+             <div className="bg-[#1e293b] w-full max-w-md rounded-[2rem] shadow-2xl h-[80vh] flex flex-col border border-slate-700 overflow-hidden" onClick={e => e.stopPropagation()}>
+                 {/* Header */}
+                 <div className="p-5 border-b border-slate-700 flex justify-between items-center bg-[#1e293b]">
+                     <div>
+                        <h3 className="font-bold text-lg text-white">{historyModalUser} 打卡紀錄</h3>
+                        <p className="text-xs text-slate-500">檢視詳細出勤狀況</p>
+                     </div>
+                     <button onClick={() => setHistoryModalUser(null)} className="bg-slate-800 text-slate-400 p-2 rounded-full hover:text-white"><X size={16}/></button>
+                 </div>
+                 
+                 {/* Content */}
+                 {historyLoading ? (
+                     <div className="flex-1 flex flex-col items-center justify-center gap-2">
+                        <Loader2 className="animate-spin text-[#00bda4] w-8 h-8" />
+                        <span className="text-xs text-slate-500">讀取中...</span>
+                     </div>
+                 ) : historyModalData ? (
+                     <div className="flex-1 flex flex-col overflow-hidden">
+                        
+                        <div className="flex-1 overflow-y-auto p-0 scrollbar-hide">
+                            {/* 本月區塊 */}
+                            <div className="sticky top-0 bg-[#0f172a] px-4 py-2 z-10 border-y border-slate-700 shadow-sm">
+                                <span className="text-[#00bda4] font-bold text-sm">本月紀錄</span>
+                            </div>
+                            <table className="w-full text-sm text-left border-collapse">
+                                <thead className="text-xs text-slate-500 uppercase bg-[#1e293b]">
+                                    <tr>
+                                        <th className="px-4 py-3 font-bold">日期</th>
+                                        <th className="px-2 py-3 font-bold text-center text-blue-400">上班</th>
+                                        <th className="px-2 py-3 font-bold text-center text-orange-400">下班</th>
+                                        <th className="px-2 py-3 font-bold text-right">狀態</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-700/50">
+                                    {historyModalData.current.length === 0 ? (
+                                        <tr><td colSpan={4} className="text-center py-6 text-slate-600 text-xs">無本月資料</td></tr>
+                                    ) : (
+                                        historyModalData.current.map((row: any, i: number) => {
+                                            const isLeave = row.note && (row.note.includes("假") || row.note.includes("休") || row.note.includes("節"));
+                                            return (
+                                                <tr key={i} className="hover:bg-slate-800/50 transition-colors">
+                                                    <td className="px-4 py-3">
+                                                        <div className="font-bold text-slate-200">{row.date.slice(5)}</div>
+                                                        <div className="text-[10px] text-slate-500 font-bold">{row.day}</div>
+                                                    </td>
+                                                    <td className="px-2 py-3 font-bold text-center text-blue-400">{row.in || '-'}</td>
+                                                    <td className="px-2 py-3 font-bold text-center text-orange-400">{row.out || '-'}</td>
+                                                    <td className="px-2 py-3 text-right">
+                                                        {row.status ? (
+                                                            <span className="bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded text-[10px] font-bold border border-red-500/20">{row.status}</span>
+                                                        ) : (
+                                                            <span className={`text-[10px] font-bold ${isLeave ? 'text-orange-500' : 'text-slate-600'}`}>
+                                                                {isLeave ? row.note : '正常'}
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+
+                            {/* 上月區塊 */}
+                            <div className="sticky top-0 bg-[#0f172a] px-4 py-2 z-10 border-y border-slate-700 mt-4 shadow-sm">
+                                <span className="text-slate-400 font-bold text-sm">上月紀錄 ({historyModalData.lastMonthName})</span>
+                            </div>
+                            <table className="w-full text-sm text-left border-collapse mb-8">
+                                <thead className="text-xs text-slate-500 uppercase bg-[#1e293b]">
+                                    <tr>
+                                        <th className="px-4 py-3 font-bold">日期</th>
+                                        <th className="px-2 py-3 font-bold text-center text-blue-400/70">上班</th>
+                                        <th className="px-2 py-3 font-bold text-center text-orange-400/70">下班</th>
+                                        <th className="px-2 py-3 font-bold text-right">狀態</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-700/50">
+                                    {historyModalData.last.length === 0 ? (
+                                        <tr><td colSpan={4} className="text-center py-6 text-slate-600 text-xs">無上月資料</td></tr>
+                                    ) : (
+                                        historyModalData.last.map((row: any, i: number) => (
+                                            <tr key={i} className="hover:bg-slate-800/50 transition-colors opacity-70">
+                                                <td className="px-4 py-3">
+                                                    <div className="font-bold text-slate-400">{row.date.slice(5)}</div>
+                                                    <div className="text-[10px] text-slate-600 font-bold">{row.day}</div>
+                                                </td>
+                                                <td className="px-2 py-3 font-bold text-center text-blue-400/70">{row.in || '-'}</td>
+                                                <td className="px-2 py-3 font-bold text-center text-orange-400/70">{row.out || '-'}</td>
+                                                <td className="px-2 py-3 text-right">
+                                                    {row.status ? (
+                                                        <span className="bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded text-[10px] font-bold border border-red-500/20">{row.status}</span>
+                                                    ) : (
+                                                        <span className="text-[10px] text-slate-600 font-bold">正常</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                     </div>
+                 ) : (
+                     <div className="flex-1 flex items-center justify-center text-red-400">讀取失敗，請稍後再試</div>
+                 )}
+             </div>
+        </div>
+      )}
+
     </div>
   );
 };

@@ -33,6 +33,12 @@ interface User {
   allowRemote?: boolean;
   isAdmin?: boolean;
   loginTime?: number;
+  // [新增] 班別資訊
+  shift?: {
+    name: string;
+    start: string;
+    end: string;
+  };
 }
 
 const SESSION_DURATION = 21 * 24 * 60 * 60 * 1000;
@@ -62,6 +68,7 @@ const App: React.FC = () => {
             setUser(null);
           } else {
             setUser(parsed);
+            if (parsed.isAdmin) setShowAdmin(true);
           }
         }
       } catch (e) { localStorage.removeItem('yh_app_session'); }
@@ -105,6 +112,9 @@ const App: React.FC = () => {
     const userWithTime = { ...userData, loginTime: new Date().getTime() };
     setUser(userWithTime);
     localStorage.setItem('yh_app_session', JSON.stringify(userWithTime));
+    if (userData.isAdmin) {
+      setShowAdmin(true);
+    }
   };
   
   // 修改：直接登出，不問問題
