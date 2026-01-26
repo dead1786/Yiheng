@@ -242,22 +242,43 @@ function handleLogin(name, password, deviceId) {
 
   let isAdmin = false;
   let adminPwdCorrect = false;
+  let allowedRegions = []; // [新增] 儲存分區權限
+
   if (adminSheet) {
     const adminData = adminSheet.getDataRange().getValues();
     for (let j = 1; j < adminData.length; j++) {
       if (String(adminData[j][0]).trim() === cleanName) {
         const storedAdminPwd = String(adminData[j][1]).trim();
         // 檢查明碼 (舊版) 或 雜湊碼 (新版)
-        if (storedAdminPwd === cleanPwd) {
+        if (storedAdminPwd === cleanPwd || storedAdminPwd === hashedPwd) {
            isAdmin = true;
            adminPwdCorrect = true;
-           adminSheet.getRange(j+1, 2).setValue(hashedPwd); // 自動升級加密
-        } else if (storedAdminPwd === hashedPwd) {
-           isAdmin = true;
-           adminPwdCorrect = true;
+           if (storedAdminPwd === cleanPwd) adminSheet.getRange(j+1, 2).setValue(hashedPwd);
+           
+           // [新增] 讀取 D 欄 (Index 3) 分區設定
+           const regionRaw = adminData[j][3]; 
+           if (regionRaw) {
+             allowedRegions = String(regionRaw).split(',').map(s => s.trim()).filter(s => s !== "");
+           }
         }
         break;
       }
+    }
+  }
+  
+  // [新增] 若非管理員，檢查是否為主管並讀取分區
+  if (supSheet && !isAdmin) { 
+    const supData = supSheet.getDataRange().getValues();
+    for (let k = 1; k < supData.length; k++) {
+        if (String(supData[k][0]).trim() === cleanName) {
+            isSupervisor = true;
+            // 讀取 D 欄 (Index 3) 分區
+            const regionRaw = supData[k][3];
+            if (regionRaw) {
+               allowedRegions = String(regionRaw).split(',').map(s => s.trim()).filter(s => s !== "");
+            }
+            break;
+        }
     }
   }
 
@@ -341,8 +362,10 @@ function handleLogin(name, password, deviceId) {
          isAdmin: isAdmin,
          // [新增] 4. 回傳主管狀態
          isSupervisor: isSupervisor, 
-         shift: shiftInfo 
+         shift: shiftInfo,
+         regions: allowedRegions // [新增] 回傳分區列表
        };
+
     } else {
        let failCount = Number(row[5]) || 0;
        let lastFail = row[6] ? new Date(row[6]).getTime() : 0;
@@ -529,17 +552,35 @@ function getLastRawClockIn(name) {
 }
 
 function handleAdminGetData(data) {
+  // [新增] 1. 取得操作者的權限分區
+  const reqAdmin = data.adminName || "";
+  let allowedRegions = []; 
+  
+  if (reqAdmin) {
+     allowedRegions = getRegionsForUser(reqAdmin); // 呼叫下方新增的輔助函式
+  }
+  
+  // 輔助檢查：該員工是否在允許的分區內
+  const isRegionAllowed = (staffRegion) => {
+     if (allowedRegions.length === 0) return true; // 無設定代表全區
+     if (!staffRegion) return false; // 有分區限制但員工無分區 -> 不可見
+     // 檢查是否有交集 (員工分區在 N 欄，支援 "北區,中區" 格式)
+     const sRegions = String(staffRegion).split(',').map(s=>s.trim());
+     return allowedRegions.some(r => sRegions.includes(r));
+  };
+
   if (data.dataType === 'all') {
     return {
       success: true,
       allData: {
-        staff: handleAdminGetData({ dataType: 'staff' }),
-        line: handleAdminGetData({ dataType: 'line' }),
-        location: handleAdminGetData({ dataType: 'location' }),
-        record: handleAdminGetData({ dataType: 'record' }),
-        log: handleAdminGetData({ dataType: 'log' }),
-        shift: handleAdminGetData({ dataType: 'shift' }),
-        supervisor: handleAdminGetData({ dataType: 'supervisor' }) // [新增]
+        // 傳遞 adminName 確保遞迴呼叫時能過濾
+        staff: handleAdminGetData({ dataType: 'staff', adminName: reqAdmin }),
+        line: handleAdminGetData({ dataType: 'line', adminName: reqAdmin }),
+        location: handleAdminGetData({ dataType: 'location', adminName: reqAdmin }),
+        record: handleAdminGetData({ dataType: 'record', adminName: reqAdmin }),
+        log: handleAdminGetData({ dataType: 'log', adminName: reqAdmin }),
+        shift: handleAdminGetData({ dataType: 'shift', adminName: reqAdmin }),
+        supervisor: handleAdminGetData({ dataType: 'supervisor', adminName: reqAdmin }) 
       }
     };
   }
@@ -552,37 +593,129 @@ function handleAdminGetData(data) {
   else if (data.dataType === 'record') sheetName = SHEET_RECORDS;
   else if (data.dataType === 'log') sheetName = SHEET_ADMIN_LOGS;
   else if (data.dataType === 'shift') sheetName = SHEET_SHIFTS;
-  else if (data.dataType === 'supervisor') sheetName = SHEET_SUPERVISORS; // [新增]
+  else if (data.dataType === 'supervisor') sheetName = SHEET_SUPERVISORS;
   
   const sheet = ss.getSheetByName(sheetName);
   if (!sheet) return { success: false, message: "找不到工作表" };
-
   const allData = sheet.getDataRange().getDisplayValues();
   if (allData.length === 0) return { success: true, headers: [], list: [] };
-
+  
   let headers = allData[0];
   let list = [];
+
+  // [新增] 預先讀取所有員工的分區對應表 (用於過濾紀錄)
+  let staffRegionMap = {};
+  if (allowedRegions.length > 0 && (data.dataType === 'record' || data.dataType === 'log')) {
+      const staffSheet = ss.getSheetByName(SHEET_STAFF);
+      if(staffSheet) {
+          const sData = staffSheet.getDataRange().getDisplayValues();
+          for(let i=1; i<sData.length; i++) {
+              // 姓名在 Index 0, 分區在 Index 13 (N欄)
+              staffRegionMap[sData[i][0]] = sData[i][13] || "";
+          }
+      }
+  }
   
   if (data.dataType === 'staff') {
-    headers = ["姓名", "密碼", "LINE_ID", "需重設", "遠端", "帳號狀態", "裝置綁定", "班別"];
+    headers = ["姓名", "密碼", "LINE_ID", "需重設", "遠端", "帳號狀態", "裝置綁定", "班別", "分區"]; // 顯示分區
     const now = new Date().getTime();
-    list = allData.slice(1).map(row => {
-      const lockedTime = row[7] ? new Date(row[7]).getTime() : 0;
-      const isLocked = lockedTime > now;
-      const deviceId = row[10];
-      const isBound = (deviceId && deviceId.length > 5);
-      const shift = row[11] || ""; 
-      return [ row[0], "******", row[2], row[3], row[4], isLocked ? "🔒已鎖定" : "正常", isBound ? "📱已綁定" : "未綁定", shift ];
+    
+    // 過濾與轉換
+    const rawList = allData.slice(1);
+    const filteredList = [];
+    
+    rawList.forEach(row => {
+        const region = row[13] || ""; // N欄 (Index 13)
+        if (isRegionAllowed(region)) {
+            const lockedTime = row[7] ? new Date(row[7]).getTime() : 0;
+            const isLocked = lockedTime > now;
+            const deviceId = row[10];
+            const isBound = (deviceId && deviceId.length > 5);
+            const shift = row[11] || ""; 
+            filteredList.push([ row[0], "******", row[2], row[3], row[4], isLocked ? "🔒已鎖定" : "正常", isBound ? "📱已綁定" : "未綁定", shift, region ]);
+        }
     });
+    list = filteredList;
   } 
   else if (data.dataType === 'record' || data.dataType === 'log') {
     const rawData = allData.slice(1);
-    list = rawData.slice(-100).reverse();
+    let targetData = rawData;
+    
+    // 如果有分區限制，過濾紀錄
+    if (allowedRegions.length > 0) {
+        targetData = targetData.filter(row => {
+            const name = data.dataType === 'record' ? row[3] : row[1]; // Log: row[1] 為操作者或對象
+            // 若該名字不在員工名單或是其分區不符，則過濾掉
+            // (Log 可能紀錄管理員操作，這裡主要過濾員工打卡紀錄)
+            if (!staffRegionMap[name] && data.dataType === 'record') return false; 
+            if (staffRegionMap[name]) return isRegionAllowed(staffRegionMap[name]);
+            return true; // 如果是純管理員操作紀錄，保留
+        });
+    }
+
+    list = targetData.slice(-100).reverse();
   } else {
+    // 地點、班別等不特別過濾
     list = allData.slice(1);
   }
 
   return { success: true, headers: headers, list: list };
+}
+
+// [新增] 輔助函式：取得某人的分區權限 (Admin/Supervisor D欄)
+function getRegionsForUser(name) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    // 1. 查管理員表
+    const adminSheet = ss.getSheetByName(SHEET_ADMINS);
+    if(adminSheet) {
+        const data = adminSheet.getDataRange().getDisplayValues();
+        for(let i=1; i<data.length; i++) {
+            if(data[i][0] === name) {
+                const r = data[i][3]; // D欄
+                if(r) return r.split(',').map(s=>s.trim()).filter(s=>s!=="");
+            }
+        }
+    }
+    // 2. 查主管表
+    const supSheet = ss.getSheetByName(SHEET_SUPERVISORS);
+    if(supSheet) {
+        const data = supSheet.getDataRange().getDisplayValues();
+        for(let i=1; i<data.length; i++) {
+            if(data[i][0] === name) {
+                const r = data[i][3]; // D欄
+                if(r) return r.split(',').map(s=>s.trim()).filter(s=>s!=="");
+            }
+        }
+    }
+    return []; // 無設定或找不到
+}
+
+// [新增] 輔助函式：取得某人的分區權限
+function getRegionsForUser(name) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    // 1. 查管理員表
+    const adminSheet = ss.getSheetByName(SHEET_ADMINS);
+    if(adminSheet) {
+        const data = adminSheet.getDataRange().getDisplayValues();
+        for(let i=1; i<data.length; i++) {
+            if(data[i][0] === name) {
+                const r = data[i][3]; // D欄
+                if(r) return r.split(',').map(s=>s.trim()).filter(s=>s!=="");
+            }
+        }
+    }
+    // 2. 查主管表
+    const supSheet = ss.getSheetByName(SHEET_SUPERVISORS);
+    if(supSheet) {
+        const data = supSheet.getDataRange().getDisplayValues();
+        for(let i=1; i<data.length; i++) {
+            if(data[i][0] === name) {
+                const r = data[i][3]; // D欄
+                if(r) return r.split(',').map(s=>s.trim()).filter(s=>s!=="");
+            }
+        }
+    }
+    return []; // 無設定或找不到
 }
 
 function handleAdminUpdateShift(data) {

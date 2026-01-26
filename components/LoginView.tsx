@@ -65,6 +65,8 @@ export const LoginView = ({ onLogin }: Props) => {
             needReset: res.needReset, 
             allowRemote: res.allowRemote, 
             isAdmin: res.isAdmin,
+            isSupervisor: res.isSupervisor, 
+            regions: res.regions,      
             shift: res.shift 
         });
       } else {
