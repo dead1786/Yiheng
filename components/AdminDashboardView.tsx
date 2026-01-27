@@ -94,7 +94,8 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
 
   const fetchAllData = async (showLoading = false) => {
     if (showLoading) { setBlockText("資料同步中..."); setIsBlocking(true); } 
-    const res = await api.adminGetData('all');
+    // [修改] 傳遞 adminName 與 uid 進行身分驗證
+    const res = await api.adminGetData('all', user.name, user.uid);
     if (showLoading) setIsBlocking(false);
 
     if (res.success && res.allData) {
