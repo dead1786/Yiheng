@@ -190,7 +190,9 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
         // [修改] 增加 removeEventListener 確保能真的離開
         onConfirm("確定要離開打卡系統嗎？", () => { 
             window.removeEventListener('popstate', handlePopState);
+            // [修正] 嘗試退回兩步 (模擬手勢)，並延遲觸發強制關閉，解決部分瀏覽器無法退出的問題
             window.history.go(-2); 
+            setTimeout(() => { window.close(); }, 300);
         });
         exitIntentRef.current = true;
         window.history.pushState({ view: 'root' }, '', '');
