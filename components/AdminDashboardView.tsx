@@ -93,14 +93,32 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
   }, [mainTab]);
 
   const fetchAllData = async (showLoading = false) => {
-    if (showLoading) { setBlockText("資料同步中..."); setIsBlocking(true); } 
-    // [修改] 傳遞 adminName 與 uid 進行身分驗證
-    const res = await api.adminGetData('all', user.name, user.uid);
-    if (showLoading) setIsBlocking(false);
+    // 1. 若需要 Loading 則開啟遮罩
+    if (showLoading) { 
+        setBlockText("資料同步中..."); 
+        setIsBlocking(true); 
+    } 
 
-    if (res.success && res.allData) {
-      setAllData(res.allData);
-      localStorage.setItem('admin_cache_all', JSON.stringify(res.allData));
+    try {
+        console.log("正在從伺服器同步最新資料...");
+        // [修改] 傳遞 adminName 與 uid 進行身分驗證
+        const res = await api.adminGetData('all', user.name, user.uid);
+        
+        // 2. 只有當成功且真的有資料回傳時，才更新前端
+        if (res.success && res.allData) {
+            console.log("伺服器資料同步成功", res.allData);
+            setAllData(res.allData);
+            // [關鍵] 強制更新快取，確保下次重新整理也是最新的
+            localStorage.setItem('admin_cache_all', JSON.stringify(res.allData));
+        } else {
+            console.warn("同步失敗或無資料回傳:", res);
+        }
+    } catch (e) {
+        console.error("連線錯誤:", e);
+        if (showLoading) onAlert("連線錯誤，無法更新資料");
+    } finally {
+        // [關鍵] 無論成功或失敗，只要原本有開 Loading，最後都要關掉
+        if (showLoading) setIsBlocking(false);
     }
   };
 
@@ -825,7 +843,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                                             // 1. 呼叫後端
                                             await api.adminUpdateSupervisor({ name: item.name, uid: item.uid, isSupervisor: true, dept: "", title: "", region: "", adminName });
                                             
-                                            // 2. [修正] 更新全域 allData (加入一筆空的主管資料)
+                                            // 2. [修正] 更新全域 allData (加入一筆空的 主管資料)
                                             setAllData((prev: any) => {
                                                 const list = prev.supervisor?.list || [];
                                                 // 格式: [Name, Dept, Title, Region, UID]
