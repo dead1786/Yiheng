@@ -242,13 +242,54 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
   const handleSaveLocation = async () => {
     if (!newLoc.name || !newLoc.lat) return onAlert("請填寫資訊");
     
-    const op = editingLoc ? 'edit' : 'add';
-    const actionName = editingLoc ? "更新中..." : "新增中...";
-    const payload = { ...newLoc, op, adminName, oldName: editingLoc ? editingLoc[0] : null };
+    // 自定義 Loading 文字
+    setBlockText(editingLoc ? "更新地點中..." : "新增地點中..."); 
+    setIsBlocking(true);
 
-    if(await handleAction(actionName, api.adminUpdateLocation(payload))) {
-        setNewLoc({name:'', lat:'', lng:'', radius:'500', ip:''});
-        setEditingLoc(null); // 重置編輯狀態
+    try {
+        const op = editingLoc ? 'edit' : 'add';
+        const payload = { ...newLoc, op, adminName, oldName: editingLoc ? editingLoc[0] : null };
+        
+        // 呼叫 API
+        const res = await api.adminUpdateLocation(payload);
+
+        if(res.success) {
+             // [修正] 強制更新前端狀態，不用等 fetchAllData 慢慢撈
+             setAllData((prev: any) => {
+                 const list = prev.location?.list || [];
+                 // 組合新的一行資料: [Name, Lat, Lng, Radius, IP]
+                 const newRow = [newLoc.name, newLoc.lat, newLoc.lng, newLoc.radius, newLoc.ip];
+                 
+                 let newList;
+                 if (editingLoc) {
+                     // 編輯模式：找到舊名字那一行並替換
+                     newList = list.map((row: any[]) => row[0] === editingLoc[0] ? newRow : row);
+                 } else {
+                     // 新增模式：加到最前面 (讓你馬上看到)
+                     newList = [newRow, ...list];
+                 }
+                 
+                 return {
+                     ...prev,
+                     location: { ...prev.location, list: newList }
+                 };
+             });
+
+             onAlert("執行成功");
+             // 清空表單
+             setNewLoc({name:'', lat:'', lng:'', radius:'500', ip:''});
+             setEditingLoc(null);
+             
+             // 最後再偷偷背景補抓一次，確保資料一致性
+             fetchAllData(false);
+        } else {
+             onAlert(res.message || "失敗");
+        }
+    } catch(e) {
+        console.error(e);
+        onAlert("連線錯誤");
+    } finally {
+        setIsBlocking(false);
     }
   };
   // 順手補上地點刪除的前端串接
@@ -256,9 +297,73 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
 
   const handleAddShift = async () => {
     if (!newShift.name || !newShift.start || !newShift.end) return onAlert("請填寫資訊");
-    if(await handleAction("新增中...", api.adminUpdateShift({ ...newShift, op: 'add', adminName }))) setNewShift({ name: '', start: '09:00', end: '18:00' });
+    
+    setBlockText("新增班別中..."); 
+    setIsBlocking(true);
+    
+    try {
+        const res = await api.adminUpdateShift({ ...newShift, op: 'add', adminName });
+        
+        if (res.success) {
+            // [修正] 強制更新前端狀態
+            setAllData((prev: any) => {
+                const list = prev.shift?.list || [];
+                // 組合新資料: [Name, Start, End]
+                const newRow = [newShift.name, newShift.start, newShift.end];
+                return {
+                    ...prev,
+                    shift: { ...prev.shift, list: [...list, newRow] }
+                };
+            });
+
+            onAlert("執行成功");
+            setNewShift({ name: '', start: '09:00', end: '18:00' }); // 重置表單
+            
+            // 背景補抓
+            fetchAllData(false);
+        } else {
+            onAlert(res.message || "失敗");
+        }
+    } catch (e) {
+        console.error(e);
+        onAlert("連線錯誤");
+    } finally {
+        setIsBlocking(false);
+    }
   };
-  const handleDeleteShift = (name: string) => onConfirm(`確定刪除班別 [${name}]？`, () => handleAction("刪除中...", api.adminUpdateShift({ op: 'delete', targetName: name, adminName })));
+  const handleDeleteShift = (name: string) => {
+      onConfirm(`確定刪除班別 [${name}]？`, async () => {
+          setBlockText("刪除中..."); 
+          setIsBlocking(true);
+          try {
+              const res = await api.adminUpdateShift({ op: 'delete', targetName: name, adminName });
+              
+              if (res.success) {
+                  // [修正] 強制更新前端狀態 (過濾掉被刪除的班別)
+                  setAllData((prev: any) => {
+                      const list = prev.shift?.list || [];
+                      return {
+                          ...prev,
+                          shift: { 
+                              ...prev.shift, 
+                              list: list.filter((row: any[]) => row[0] !== name) 
+                          }
+                      };
+                  });
+                  
+                  onAlert("執行成功");
+                  fetchAllData(false);
+              } else {
+                  onAlert(res.message || "失敗");
+              }
+          } catch (e) {
+              console.error(e);
+              onAlert("連線錯誤");
+          } finally {
+              setIsBlocking(false);
+          }
+      });
+  };
   const handleExport = async () => {
     if(!exportSheet) return;
     setBlockText(`生成報表：${exportSheet}...`); setIsBlocking(true);
