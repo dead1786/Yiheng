@@ -190,9 +190,19 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
         // [修改] 增加 removeEventListener 確保能真的離開
         onConfirm("確定要離開打卡系統嗎？", () => { 
             window.removeEventListener('popstate', handlePopState);
-            // [修正] 嘗試退回兩步 (模擬手勢)，並延遲觸發強制關閉，解決部分瀏覽器無法退出的問題
-            window.history.go(-2); 
-            setTimeout(() => { window.close(); }, 300);
+            
+            // [修正] 強力關閉策略：多重手段確保離開
+            // 1. 嘗試欺騙瀏覽器 (Hack：將當前頁面標記為彈出視窗再關閉)
+            try { window.open('', '_self', ''); window.close(); } catch (e) {}
+            
+            // 2. 標準關閉指令
+            try { window.close(); } catch (e) {}
+
+            // 3. 嘗試退回歷史紀錄最開頭 (模擬連續按上一頁)
+            window.history.go(-999);
+            
+            // 4. [保底] 若瀏覽器安全性強制擋下關閉，則直接導向 Google，確保使用者離開系統畫面
+            setTimeout(() => { window.location.href = "https://www.google.com"; }, 300);
         });
         exitIntentRef.current = true;
         window.history.pushState({ view: 'root' }, '', '');
