@@ -209,8 +209,24 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
       else { onAlert(res.message || "失敗"); return false; }
   };
 
-  const handleUnbindStaff = (name: string) => onConfirm(`解除 [${name}] 綁定？`, () => handleAction("解綁中...", api.adminUpdateStaff({ op: 'unbind', targetName: name, adminName })));
-  const handleKickStaff = (name: string) => onConfirm(`強制登出 [${name}]？`, () => handleAction("執行中...", api.adminUpdateStaff({ op: 'kick', targetName: name, adminName })));
+  // [修改] 接收完整資訊以優化顯示與 API 呼叫
+  const handleUnbindStaff = (uid: string, name: string, region: string) => {
+      const label = `${name}${region ? `-${region}` : ''}`;
+      onConfirm(
+          `解除 [${label}]\n(UID: ${uid}) 綁定？`, 
+          () => handleAction("解綁中...", api.adminUpdateStaff({ op: 'unbind', targetUid: uid, targetName: name, adminName }))
+      );
+  };
+
+  const handleKickStaff = (uid: string, name: string, region: string) => {
+      const label = `${name}${region ? `-${region}` : ''}`;
+      onConfirm(
+          `強制登出 [${label}]\n(UID: ${uid})？`, 
+          () => handleAction("執行中...", api.adminUpdateStaff({ op: 'kick', targetUid: uid, targetName: name, adminName }))
+      );
+  };
+
+  // 解鎖維持原樣或照樣升級皆可，這裡先保留原邏輯，但建議傳 UID
   const handleUnlockStaff = (name: string) => onConfirm(`解除 [${name}] 鎖定？`, () => handleAction("解鎖中...", api.adminUnlockStaff(name, adminName)));
   const handleDeleteStaff = () => { if(editingStaff) onConfirm(`刪除員工 [${editingStaff[0]}]？`, async () => { if(await handleAction("刪除中...", api.adminUpdateStaff({ op: 'delete', targetUid: editingStaff[9], adminName }))) setEditingStaff(null); }); };
   const handleSaveStaff = async () => {
@@ -467,9 +483,11 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                                         {isLocked ? (
                                             <button onClick={() => handleUnlockStaff(uid || row[0])} className="flex-1 py-2 bg-[#00bda4]/10 text-[#00bda4] rounded-lg text-xs font-bold flex items-center justify-center gap-1 hover:bg-[#00bda4]/20"><Unlock size={14}/> 解鎖</button>
                                         ) : (
-                                            <button onClick={() => handleUnbindStaff(uid || row[0])} disabled={row[6] !== "📱已綁定"} className="flex-1 py-2 bg-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-30 disabled:text-slate-500 hover:bg-slate-600"><Unlink size={14}/> 解綁</button>
+                                            // [修改] 傳入 uid, name, region
+                                            <button onClick={() => handleUnbindStaff(uid || row[0], row[0], region)} disabled={row[6] !== "📱已綁定"} className="flex-1 py-2 bg-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-30 disabled:text-slate-500 hover:bg-slate-600"><Unlink size={14}/> 解綁</button>
                                         )}
-                                        <button onClick={() => handleKickStaff(uid || row[0])} className="flex-1 py-2 bg-red-500/10 text-red-400 rounded-lg text-xs font-bold flex items-center justify-center gap-1 hover:bg-red-500/20 border border-transparent hover:border-red-500/30"><UserMinus size={14}/> 踢除</button>
+                                        {/* [修改] 傳入 uid, name, region */}
+                                        <button onClick={() => handleKickStaff(uid || row[0], row[0], region)} className="flex-1 py-2 bg-red-500/10 text-red-400 rounded-lg text-xs font-bold flex items-center justify-center gap-1 hover:bg-red-500/20 border border-transparent hover:border-red-500/30"><UserMinus size={14}/> 踢除</button>
                                     </div>
                                 </div>
                             );
