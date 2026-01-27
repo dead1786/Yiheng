@@ -774,15 +774,24 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                             const supervisors = allData.supervisor?.list || [];
                             const supMap = new Map();
                             
-                            // [修改] 建立主管 Map (優先使用 UID)
+                            // [修正] 強化資料讀取邏輯，確保從後端或快取抓回的欄位能正確對應
                             supervisors.forEach((s: any[]) => {
-                                const rowUid = s[4];
-                                const rowName = s[0];
-                                // [修正] 必須讀取 Index 3 (分區)，否則編輯框會讀不到
-                                const val = { dept: s[1], title: s[2], region: s[3] };
+                                if (!s || s.length < 1) return;
+                                const rowName = String(s[0] || "").trim();
+                                const rowUid = String(s[4] || "").trim();
                                 
-                                if (rowUid) supMap.set(rowUid, val);
-                                else supMap.set(rowName, val);
+                                // 建立主管資訊物件，若欄位不存在則給予空字串避免顯示 undefined
+                                const val = { 
+                                    dept: String(s[1] || ""), 
+                                    title: String(s[2] || ""), 
+                                    region: String(s[3] || "") 
+                                };
+                                
+                                // 優先以 UID 綁定資訊，若無 UID 則以姓名綁定
+                                if (rowUid && rowUid !== "undefined") {
+                                    supMap.set(rowUid, val);
+                                }
+                                supMap.set(rowName, val);
                             });
 
                             // 合併並排序 (主管在最上面)

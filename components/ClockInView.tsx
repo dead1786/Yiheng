@@ -213,9 +213,13 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
     }
   }, [showHistory, showChangePwd]);
 
-  // [新增] 檢查目前 IP 是否符合當選地點的 IP 設定
+  // [修正] 增加安全檢查，確保 ip 欄位存在且為字串才執行 includes，避免畫面變白
   const currentLocData = locations.find(l => l.name === selectedLoc);
-  const isIpMatch = currentLocData && currentLocData.ip && clientIp && currentLocData.ip.includes(clientIp);
+  const isIpMatch = !!(currentLocData && 
+                       typeof currentLocData.ip === 'string' && 
+                       currentLocData.ip.trim() !== '' && 
+                       clientIp && 
+                       currentLocData.ip.includes(clientIp));
 
   // [修改] 允許條件：GPS定位成功 OR 遠端權限 OR (有IP且IP符合該地點設定)
   const canSubmit = coords || user.allowRemote || isIpMatch;
