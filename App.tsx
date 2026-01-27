@@ -30,6 +30,7 @@ const ModalDialog = ({ isOpen, type, message, onConfirm, onCancel }: any) => {
 interface User {
   name: string;
   uid?: string;           // [新增] 唯一識別碼
+  region?: string;        // [新增] 個人分區 (顯示用)
   needReset: boolean;
   allowRemote?: boolean;
   isAdmin?: boolean;
@@ -66,8 +67,9 @@ const App: React.FC = () => {
           const loginTime = parsed.loginTime || 0;
           const now = new Date().getTime();
           
-          // [修改] 增加檢查：如果沒有 UID (舊資料) 或 Session 過期，都強制清除
-          if (!parsed.uid || (now - loginTime > SESSION_DURATION)) {
+          // [修改] 邏輯修正：只有「非管理員 且 無UID」才視為異常舊資料
+          // (純管理員本來就沒有 UID，必須豁免)
+          if ((!parsed.isAdmin && !parsed.uid) || (now - loginTime > SESSION_DURATION)) {
             localStorage.removeItem('yh_app_session');
             setUser(null);
           } else {

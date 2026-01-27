@@ -62,7 +62,8 @@ export const LoginView = ({ onLogin }: Props) => {
       if (res.success) {
         onLogin({ 
             name: res.name, 
-            uid: res.uid,   
+            uid: res.uid,
+            region: res.region, // [新增] 接收個人分區
             needReset: res.needReset, 
             allowRemote: res.allowRemote, 
             isAdmin: res.isAdmin,
@@ -152,9 +153,9 @@ export const LoginView = ({ onLogin }: Props) => {
             <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 flex items-start gap-3 focus-within:ring-2 focus-within:ring-[#28B89B]/50 transition-all">
               <div className="mt-2 text-slate-400"><User size={20} /></div>
               <div className="flex-1">
-                 <label className="block text-xs font-bold text-slate-500 mb-0.5">姓名</label>
+                 <label className="block text-xs font-bold text-slate-500 mb-0.5">帳號</label>
                  <input className="w-full bg-transparent border-none p-0 text-slate-800 font-bold placeholder:text-slate-300 placeholder:font-normal focus:ring-0 outline-none text-base" 
-                    placeholder="請輸入姓名" type="text" value={name} onChange={e => setName(e.target.value)} />
+                    placeholder="請輸入姓名 或 UID" type="text" value={name} onChange={e => setName(e.target.value)} />
               </div>
             </div>
 

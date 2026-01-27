@@ -385,7 +385,12 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
                 </button>
               )}
             </div>
-            <p className="text-xs text-slate-400 font-medium">Hi, {user.name}</p>
+            <div className="flex flex-col">
+                <p className="text-sm font-bold text-slate-600">
+                    {user.name} {user.region ? <span className="text-xs text-slate-400">({user.region})</span> : ''}
+                </p>
+                <p className="text-[10px] text-slate-400 font-mono">UID: {user.uid}</p>
+            </div>
           </div>
         </div>
         

@@ -48,7 +48,8 @@ function doPost(e) {
   
   if (action === "clockIn") return responseJSON(handleClockIn(postData));
   if (action === "getHistory") return responseJSON(handleGetHistory(postData.uid, postData.loginTime));
-  if (action === "checkStatus") return responseJSON(handleCheckStatus(postData.uid, postData.loginTime));
+  // [修改] 傳入 name
+  if (action === "checkStatus") return responseJSON(handleCheckStatus(postData.uid, postData.loginTime, postData.name));
   if (action === "getLocations") return responseJSON(getLocations());
   
   // --- 管理員後台功能 ---
@@ -58,8 +59,8 @@ function doPost(e) {
   if (action === "adminUpdateSupervisor") return responseJSON(handleAdminUpdateSupervisor(postData)); 
   if (action === "adminUnlockStaff") return responseJSON(handleAdminUnlockStaff(postData));
   if (action === "adminGetDailyRecords") return responseJSON(handleAdminGetDailyRecords(postData.date));
-  if (action === "adminGetStaffHistory") return responseJSON(handleAdminGetStaffHistory(postData.targetName));
-  
+  // [修正] 改傳 targetUid 給函式
+  if (action === "adminGetStaffHistory") return responseJSON(handleAdminGetStaffHistory(postData.targetUid));
   if (action === "adminUpdateShift") return responseJSON(handleAdminUpdateShift(postData));
   if (action === "adminGetSheetList") return responseJSON(handleAdminGetSheetList());
   if (action === "adminDownloadExcel") return responseJSON(handleAdminDownloadExcel(postData));
@@ -83,31 +84,141 @@ function updateLastActive(name) {
 // 2. 核心邏輯區 (Logic)
 // ==========================================
 
-// [修改] 強化版狀態檢查 (改用 UID)
-function handleCheckStatus(uid, loginTime) {
-  // 1. 先檢查是否被踢 (優先級最高)
-  if (!checkSessionValid(uid, loginTime)) {
-    return { success: false, status: 'force_logout', message: "管理者已強制登出您的帳號。" };
+// [修改] 強化版狀態檢查 (支援管理員 E 欄踢出 + 無視員工名單限制)
+function handleCheckStatus(uid, loginTime, name) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let userProfile = null;
+  let isAdminForceLogout = false;
+  
+  // 1. 檢查是否為管理員 (並檢查是否被 E 欄踢出)
+  const adminSheet = ss.getSheetByName(SHEET_ADMINS);
+  let adminInfo = null;
+  
+  if (adminSheet && name) {
+      const aData = adminSheet.getDataRange().getValues();
+      for (let j = 1; j < aData.length; j++) {
+          if (String(aData[j][0]).trim() === name) {
+               // 檢查 E 欄 (Index 4) 是否為 TRUE -> 強制踢出
+               if (aData[j][4] === true || aData[j][4] === "TRUE") {
+                   isAdminForceLogout = true;
+               }
+               
+               // 建立基礎管理員 Profile
+               const ar = aData[j][3];
+               const adminRegions = ar ? String(ar).split(',').map(s=>s.trim()).filter(s=>s!=="") : [];
+               
+               adminInfo = {
+                   isAdmin: true,
+                   adminRegions: adminRegions
+               };
+               break;
+          }
+      }
   }
 
-  // 2. 檢查是否需要重設密碼
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(SHEET_STAFF);
-  const data = sheet.getDataRange().getValues();
+  if (isAdminForceLogout) {
+      return { success: false, status: 'force_logout', message: "管理員權限已被撤銷或強制登出。" };
+  }
+
+  // 2. 檢查員工表 (如果有的話)
+  // 先檢查 Session (針對有 UID 的員工)
+  if (uid && !checkSessionValid(uid, loginTime)) {
+     return { success: false, status: 'force_logout', message: "管理者已強制登出您的帳號。" };
+  }
+
+  const staffSheet = ss.getSheetByName(SHEET_STAFF);
+  const data = staffSheet.getDataRange().getValues();
   
-  // [修改] 改為比對 UID (第 15 欄, Index 14)
+  // 搜尋員工資料
   for (let i = 1; i < data.length; i++) {
-    if (String(data[i][14]) === String(uid)) {
-      // 檢查第 4 欄 (Index 3) "需重設"
-      const status = data[i][3];
-      if (status === true || status === "TRUE") {
-         return { success: true, status: 'need_reset' };
+    // 比對 UID (優先) 或 名字 (若無 UID)
+    const rowUid = String(data[i][14]);
+    const rowName = String(data[i][0]);
+    
+    if ((uid && rowUid === String(uid)) || (!uid && name && rowName === name)) {
+      const row = data[i];
+      const needReset = (row[3] === true || row[3] === "TRUE");
+      
+      if (needReset) return { success: true, status: 'need_reset' };
+
+      const allowRemoteStaff = (row[4] === true || row[4] === "TRUE");
+      const staffRegion = row[13] || ""; 
+      
+      // 讀取班別
+      let shiftInfo = null;
+      const shiftName = row[11];
+      if (shiftName) {
+         const shiftSheet = ss.getSheetByName(SHEET_SHIFTS);
+         if (shiftSheet) {
+            const shifts = shiftSheet.getDataRange().getDisplayValues();
+            for (let k = 1; k < shifts.length; k++) {
+                if (shifts[k][0] === shiftName) {
+                    shiftInfo = { name: shifts[k][0], start: shifts[k][1], end: shifts[k][2] };
+                    break;
+                }
+            }
+         }
       }
+      
+      // 檢查主管身分
+      let isSupervisor = false;
+      let supRegions = [];
+      const supSheet = ss.getSheetByName(SHEET_SUPERVISORS);
+      if (supSheet) {
+         const sData = supSheet.getDataRange().getValues();
+         for (let k = 1; k < sData.length; k++) {
+             const sUid = sData[k][4];
+             const sName = String(sData[k][0]).trim();
+             if ((sUid && uid && String(sUid) === String(uid)) || (!sUid && sName === rowName)) {
+                 isSupervisor = true;
+                 const sr = sData[k][3];
+                 if (sr) supRegions = String(sr).split(',').map(s=>s.trim()).filter(s=>s!=="");
+                 break;
+             }
+         }
+      }
+      
+      // 合併權限 (管理員權限可能來自上面的 check)
+      const finalIsAdmin = adminInfo ? true : false;
+      const finalAllowRemote = allowRemoteStaff || finalIsAdmin || isSupervisor;
+      
+      const adminRegions = adminInfo ? adminInfo.adminRegions : [];
+      const allRegions = [...new Set([...(staffRegion ? staffRegion.split(',').map(s=>s.trim()) : []), ...adminRegions, ...supRegions])].filter(s=>s!=="");
+
+      userProfile = {
+         name: rowName,
+         uid: rowUid || uid, // 確保有 UID
+         needReset: false,
+         allowRemote: finalAllowRemote,
+         isAdmin: finalIsAdmin,
+         isSupervisor: isSupervisor,
+         shift: shiftInfo,
+         regions: allRegions
+      };
       break;
     }
   }
 
-  return { success: true, status: 'ok' };
+  // [重點] 如果 userProfile 還是空的，但他是管理員 (adminInfo 存在)，則手動建立一個純管理員 Profile
+  if (!userProfile && adminInfo) {
+      userProfile = {
+          name: name,
+          uid: "", // 純管理員無 UID
+          needReset: false,
+          allowRemote: true,
+          isAdmin: true,
+          isSupervisor: false,
+          shift: null,
+          regions: adminInfo.adminRegions
+      };
+  }
+
+  if (userProfile) {
+      return { success: true, status: 'ok', updatedUser: userProfile };
+  }
+  
+  // 找不到人
+  return { success: false, status: 'force_logout', message: "帳號資料異常或已刪除。" };
 }
 
 // [修改] 改用 UID 檢查 session
@@ -138,7 +249,7 @@ function checkSessionValid(uid, clientLoginTime) {
 function handleAdminGetSheetList() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const allSheets = ss.getSheets();
-  const systemSheets = [SHEET_STAFF, SHEET_ADMINS, SHEET_LOCATIONS, SHEET_RECORDS, SHEET_LINE_IDS, SHEET_ADMIN_LOGS, SHEET_SHIFTS, "line bot設定", "北區維運班表", "國定假日", "待處理","當日出勤","當月統計"];
+  const systemSheets = [SHEET_STAFF, SHEET_ADMINS, SHEET_LOCATIONS, SHEET_RECORDS, SHEET_LINE_IDS, SHEET_ADMIN_LOGS, SHEET_SHIFTS, "line bot設定", "北區維運班表", "國定假日", "待處理","當日出勤","當月統計","主管名單"];
   let list = [];
   list.push({ name: SHEET_CURRENT_MONTH, label: `${SHEET_CURRENT_MONTH} (當前)` });
   allSheets.forEach(sheet => {
@@ -564,10 +675,10 @@ function handleGetHistory(uid, loginTime) {
   return { 
     success: true, 
     data: { 
-      // 當月：讀取 "打卡紀錄整理"
-      current: fetchUserData(ss, "打卡紀錄整理", cleanName), 
+      // 當月：讀取 "打卡紀錄整理" (傳入 UID)
+      current: fetchUserData(ss, "打卡紀錄整理", cleanName, uid), 
       // 上月：讀取 "YYYY/M"
-      last: fetchUserData(ss, lastMonthSheetName, cleanName), 
+      last: fetchUserData(ss, lastMonthSheetName, cleanName, uid), 
       lastMonthName: lastMonthSheetName, 
       lastRawRec: lastRawRec 
     } 
@@ -813,12 +924,24 @@ function handleAdminUpdateStaff(data) {
   const sheet = ss.getSheetByName(SHEET_STAFF);
   const op = data.op;
   const adminName = data.adminName || "未知管理員";
-
+  
   if (op === 'add') {
     // 產生 UID
     const newUID = 'u_' + Math.random().toString(36).substr(2, 8);
-    // 寫入包含 UID (第 15 欄)
-    sheet.appendRow([ data.newData.name, hashData(data.newData.password), data.newData.lineId || "", "TRUE", data.newData.allowRemote === "TRUE" ? "TRUE" : "FALSE", 0, "", "", 24, "", "", data.newData.shift || "", "", "", newUID ]);
+    // [修改] 寫入包含 Region (第 14 欄/Index 13) 與 UID (第 15 欄/Index 14)
+    // 欄位順序: Name, Pwd, Line, Reset, Remote, Fail, LastFail, LockUntil, LockMult, LastActive, DeviceId, Shift, ForceLogout, Region, UID
+    sheet.appendRow([ 
+        data.newData.name, 
+        hashData(data.newData.password), 
+        data.newData.lineId || "", 
+        "TRUE", 
+        data.newData.allowRemote === "TRUE" ? "TRUE" : "FALSE", 
+        0, "", "", 24, "", "", 
+        data.newData.shift || "", 
+        "", 
+        data.newData.region || "", // Region
+        newUID 
+    ]);
     logAdminAction(adminName, "新增員工", `新增了 ${data.newData.name} (UID:${newUID})`);
     return { success: true };
   }
@@ -826,46 +949,65 @@ function handleAdminUpdateStaff(data) {
   if (op === 'edit') {
     const rows = sheet.getDataRange().getValues();
     let targetIndex = findStaffIndexByUID(rows, data.targetUid);
-    
     // 相容性搜尋 (若無 UID 則用舊名找)
     if (targetIndex === -1 && data.oldName) {
        for(let i=1; i<rows.length; i++) {
-          if(rows[i][0] === data.oldName) { targetIndex = i; break; }
+          if(rows[i][0] === data.oldName) { targetIndex = i;
+          break; }
        }
     }
 
     if (targetIndex !== -1) {
         const i = targetIndex;
         const oldRow = rows[i];
-        const oldData = { name: String(oldRow[0]), pwd: String(oldRow[1]), line: String(oldRow[2]), reset: String(oldRow[3]).toUpperCase(), remote: String(oldRow[4]).toUpperCase(), shift: String(oldRow[11]||"") };
+        const oldData = { 
+            name: String(oldRow[0]), 
+            pwd: String(oldRow[1]), 
+            line: String(oldRow[2]), 
+            reset: String(oldRow[3]).toUpperCase(), 
+            remote: String(oldRow[4]).toUpperCase(), 
+            shift: String(oldRow[11]||""),
+            region: String(oldRow[13]||"") // 讀取舊分區
+        };
         
         let finalPwd = oldData.pwd;
         let isPwdChanged = false;
         if (data.newData.password !== "******") {
-           finalPwd = hashData(data.newData.password); 
+           finalPwd = hashData(data.newData.password);
            isPwdChanged = true;
         }
 
-        const newData = { name: String(data.newData.name), pwd: finalPwd, line: String(data.newData.lineId), reset: String(data.newData.needReset).toUpperCase(), remote: String(data.newData.allowRemote).toUpperCase(), shift: String(data.newData.shift || "") };
+        const newData = { 
+            name: String(data.newData.name), 
+            pwd: finalPwd, 
+            line: String(data.newData.lineId), 
+            reset: String(data.newData.needReset).toUpperCase(), 
+            remote: String(data.newData.allowRemote).toUpperCase(), 
+            shift: String(data.newData.shift || ""),
+            region: String(data.newData.region || "") // 新分區
+        };
         
         let changes = [];
         if (oldData.name !== newData.name) changes.push(`姓名: ${oldData.name} -> ${newData.name}`);
         if (isPwdChanged) changes.push(`密碼已變更`);
         if (oldData.line !== newData.line) changes.push(`LineID: ${oldData.line} -> ${newData.line}`);
         if (oldData.shift !== newData.shift) changes.push(`班別: ${oldData.shift} -> ${newData.shift}`);
-
-        sheet.getRange(i+1, 1, 1, 5).setValues([[ newData.name, newData.pwd, newData.line, newData.reset, newData.remote ]]);
-        sheet.getRange(i+1, 6, 1, 4).setValues([[0, "", "", 24]]);
-        sheet.getRange(i+1, 12).setValue(newData.shift);
+        if (oldData.region !== newData.region) changes.push(`分區: ${oldData.region} -> ${newData.region}`);
         
+        // 更新 Col 1~5 (A~E)
+        sheet.getRange(i+1, 1, 1, 5).setValues([[ newData.name, newData.pwd, newData.line, newData.reset, newData.remote ]]);
+        // 重置鎖定 (Col 6~9)
+        sheet.getRange(i+1, 6, 1, 4).setValues([[0, "", "", 24]]);
+        // 更新班別 (Col 12/L)
+        sheet.getRange(i+1, 12).setValue(newData.shift);
+        // [修改] 更新分區 (Col 14/N)
+        sheet.getRange(i+1, 14).setValue(newData.region);
+
         const logDetail = changes.length > 0 ? `修改 ${data.oldName}：${changes.join('、')}` : `修改 ${data.oldName} (無變更)`;
         logAdminAction(adminName, "編輯員工", logDetail);
-        
-        // [移除] 移除 updateAdminPasswordIfExist 以避免同名誤改
         return { success: true };
     }
     return { success: false, message: "找不到該員工" };
-  
   }
 
   // [修正] 確保這段邏輯在函式大括號內部
@@ -1043,22 +1185,23 @@ function handleAdminUpdateSupervisor(data) {
     // 設定 (新增或更新)
     const dept = data.dept || "";
     const title = data.title || "";
+    const region = data.region || ""; // [新增] 讀取分區
     
     if (rowIndex !== -1) {
-      // 更新 (部門, 職稱) 且 [新增] 若原本沒 UID 則補上 (Column E / Index 4)
-      // sheet.getRange(row, col) -> Update B, C (Col 2, 3)
-      sheet.getRange(rowIndex, 2, 1, 2).setValues([[dept, title]]);
+      // 更新 (部門(B), 職稱(C), 分區(D))
+      // sheet.getRange(row, col) -> Update B, C, D (Col 2, 3, 4)
+      sheet.getRange(rowIndex, 2, 1, 3).setValues([[dept, title, region]]);
       
       // 補寫 UID 到第 5 欄 (如果有的話)
       if (targetUid) {
          sheet.getRange(rowIndex, 5).setValue(targetUid);
       }
       
-      logAdminAction(adminName, "更新主管", `更新 ${targetName} 資料：${dept} / ${title}`);
+      logAdminAction(adminName, "更新主管", `更新 ${targetName} 資料：${dept} / ${title} / 分區:${region}`);
     } else {
-      // 新增 (保留 D 欄分區為空，將 UID 寫入 E 欄)
-      sheet.appendRow([targetName, dept, title, "", targetUid]);
-      logAdminAction(adminName, "新增主管", `將 ${targetName} 設為主管：${dept} / ${title}`);
+      // 新增 (A:Name, B:Dept, C:Title, D:Region, E:UID)
+      sheet.appendRow([targetName, dept, title, region, targetUid]);
+      logAdminAction(adminName, "新增主管", `將 ${targetName} 設為主管：${dept} / ${title} / 分區:${region}`);
     }
     return { success: true };
   }
@@ -1139,17 +1282,32 @@ function checkTooFrequent(uid, recordSheet) {
     return false;
 }
 
-// [重寫] 讀取矩陣式工作表資料
-function fetchUserData(ss, sheetName, targetName) {
+// [重寫] 讀取矩陣式工作表資料 (新增 uid 參數)
+function fetchUserData(ss, sheetName, targetName, uid) {
   const sheet = ss.getSheetByName(sheetName);
-  if (!sheet) return []; // 找不到工作表回傳空
+  if (!sheet) return [];
 
   const cleanTarget = String(targetName).trim();
-  
-  // 1. 在 E:AR 範圍搜尋員工名字
-  // 使用 TextFinder 比遍歷資料快
-  const finder = sheet.getRange("E:AR").createTextFinder(cleanTarget).matchEntireCell(true);
-  const result = finder.findNext();
+  let result = null;
+
+  // [新增] 針對「打卡紀錄整理」且有 UID 時，優先搜尋 "姓名+UID"
+  if (sheetName === "打卡紀錄整理" && uid) {
+     const comboName = cleanTarget + uid;
+     const comboFinder = sheet.getRange("E:AR").createTextFinder(comboName).matchEntireCell(true);
+     result = comboFinder.findNext();
+  }
+
+  // Fallback: 如果沒傳 UID 或找不到，使用原本的姓名搜尋
+  if (!result) {
+     let finder = sheet.getRange("E:AR").createTextFinder(cleanTarget).matchEntireCell(true);
+     result = finder.findNext();
+     
+     // 二次 Fallback: 模糊搜尋
+     if (!result && sheetName === "打卡紀錄整理") {
+        finder = sheet.getRange("E:AR").createTextFinder(cleanTarget).matchEntireCell(false);
+        result = finder.findNext();
+     }
+  }
   
   if (!result) return []; // 找不到該員工
 
@@ -1242,7 +1400,7 @@ function handleLineEvents(events) {
             const profile = getUserProfile(event.source.userId); 
             sheet.appendRow([new Date(), profile ? profile.displayName : "未知", event.source.userId, event.type]); 
             if (event.replyToken) {
-                replyLine(event.replyToken, `✅ ID 已紀錄：${event.source.userId}\n請等待管理員設定帳號。\n\n您的打卡系統預設初始密碼為：123\n(請等待管理員通知開通後再登入)\n\n連結：https://yiheng.vercel.app/`); 
+                replyLine(event.replyToken, `✅ ID 已紀錄：${event.source.userId}\n請等待管理員設定帳號。\n\n您的打卡系統預設初始密碼為：1234\n(請等待管理員通知開通後再登入)\n\n連結：https://yiheng.vercel.app/`); 
             }
         } 
     });
@@ -1269,7 +1427,7 @@ function adminSendPasswords() {
     const data = sheet.getDataRange().getDisplayValues();
     for (let i = 1; i < data.length; i++) { 
         if (data[i][2] && data[i][2].length > 10 && data[i][1]) { 
-            pushLine(data[i][2], `👋 哈囉 ${data[i][0]}，這是您的打卡系統初始密碼：123\n\n🔑${data[i][1]}\n\n請儘快登入系統並修改密碼。\n\n連結：https://yiheng.vercel.app/。`);
+            pushLine(data[i][2], `👋 哈囉 ${data[i][0]}，這是您的打卡系統初始密碼：1234\n\n🔑${data[i][1]}\n\n請儘快登入系統並修改密碼。\n\n連結：https://yiheng.vercel.app/。`);
         } 
     } 
 }
@@ -1397,16 +1555,16 @@ function handleAdminGetDailyRecords(dateStr) {
   return { success: true, list: filtered };
 }
 
-// [修改] 管理員查詢特定員工歷史 (接收 UID -> 反查 Name -> 讀取矩陣)
+// [修正] 管理員查詢特定員工歷史 (接收 UID -> 反查 Name -> 讀取矩陣)
 function handleAdminGetStaffHistory(targetUid) {
-  // [新增] 透過 UID 找名字
+  // 1. 透過 UID 反查姓名
   const targetName = getNameByUid(targetUid);
   if (!targetName) return { success: false, message: "找不到該員工" };
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const mainSheet = ss.getSheetByName("打卡紀錄整理");
 
-  // 1. 從 A1, A2 讀取當前年月
+  // 2. 讀取當前年月
   let currentYear = new Date().getFullYear();
   let currentMonth = new Date().getMonth() + 1;
   
@@ -1419,7 +1577,7 @@ function handleAdminGetStaffHistory(targetUid) {
      }
   }
 
-  // 2. 推算上個月
+  // 3. 推算上個月
   let lastYear = currentYear;
   let lastMonth = currentMonth - 1;
   if (lastMonth < 1) {
@@ -1428,11 +1586,13 @@ function handleAdminGetStaffHistory(targetUid) {
   }
   const lastMonthSheetName = `${lastYear}/${lastMonth}`;
   const cleanName = String(targetName).trim();
+
   return { 
     success: true, 
     data: { 
-      current: fetchUserData(ss, "打卡紀錄整理", cleanName), 
-      last: fetchUserData(ss, lastMonthSheetName, cleanName),
+      // [重點] 傳入 targetUid 讓 fetchUserData 可以組出 "姓名+UID"
+      current: fetchUserData(ss, "打卡紀錄整理", cleanName, targetUid), 
+      last: fetchUserData(ss, lastMonthSheetName, cleanName, targetUid),
       lastMonthName: lastMonthSheetName,
       targetName: cleanName
     } 
