@@ -614,11 +614,13 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                             
                             // [修改] 建立主管 Map (優先使用 UID)
                             supervisors.forEach((s: any[]) => {
-                                const rowUid = s[4]; // 假設後端將 UID 放在 Index 4
+                                const rowUid = s[4];
                                 const rowName = s[0];
-                                // 如果有 UID 就用 UID 當 key，否則用 Name (相容舊資料)
-                                if (rowUid) supMap.set(rowUid, { dept: s[1], title: s[2] });
-                                else supMap.set(rowName, { dept: s[1], title: s[2] });
+                                // [修正] 必須讀取 Index 3 (分區)，否則編輯框會讀不到
+                                const val = { dept: s[1], title: s[2], region: s[3] };
+                                
+                                if (rowUid) supMap.set(rowUid, val);
+                                else supMap.set(rowName, val);
                             });
 
                             // 合併並排序 (主管在最上面)
@@ -641,45 +643,111 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
 
                                 const handleToggle = async () => {
                                     const newStatus = !item.isSup;
-                                    // 修正策略：Toggle 直接呼叫 API 變更狀態。若是開啟，預設帶入空值。
                                     
                                     if (!newStatus) {
                                         onConfirm(`確定移除 [${item.name}] 的主管權限？`, async () => {
                                             setBlockText("更新權限中..."); setIsBlocking(true);
-                                            // [修改] 傳遞 uid
-                                            await api.adminUpdateSupervisor({ name: item.name, uid: item.uid, isSupervisor: false, adminName });
-                                            await fetchAllData(false);
-                                            setIsBlocking(false);
+                                            try {
+                                                // 1. 呼叫後端
+                                                await api.adminUpdateSupervisor({ name: item.name, uid: item.uid, isSupervisor: false, adminName });
+                                                
+                                                // 2. [修正] 更新全域 allData (從 supervisor.list 移除該員)
+                                                setAllData((prev: any) => {
+                                                    const list = prev.supervisor?.list || [];
+                                                    return {
+                                                        ...prev,
+                                                        supervisor: {
+                                                            ...prev.supervisor,
+                                                            list: list.filter((s: any[]) => s[0] !== item.name)
+                                                        }
+                                                    };
+                                                });
+                                                
+                                                await fetchAllData(false);
+                                            } catch(e) {
+                                                console.error(e);
+                                                alert("移除失敗");
+                                            } finally {
+                                                setIsBlocking(false);
+                                            }
                                         });
                                     } else {
-                                        // 開啟權限 (預設空值)
                                         setBlockText("啟用中..."); setIsBlocking(true);
-                                        // [修改] 傳遞 uid
-                                        await api.adminUpdateSupervisor({ name: item.name, uid: item.uid, isSupervisor: true, dept: "", title: "", region: "", adminName });
-                                        await fetchAllData(false);
-                                        setIsBlocking(false);
+                                        try {
+                                            // 1. 呼叫後端
+                                            await api.adminUpdateSupervisor({ name: item.name, uid: item.uid, isSupervisor: true, dept: "", title: "", region: "", adminName });
+                                            
+                                            // 2. [修正] 更新全域 allData (加入一筆空的主管資料)
+                                            setAllData((prev: any) => {
+                                                const list = prev.supervisor?.list || [];
+                                                // 格式: [Name, Dept, Title, Region, UID]
+                                                const newRow = [item.name, "", "", "", item.uid || ""];
+                                                return {
+                                                    ...prev,
+                                                    supervisor: {
+                                                        ...prev.supervisor,
+                                                        list: [...list, newRow]
+                                                    }
+                                                };
+                                            });
+
+                                            await fetchAllData(false);
+                                        } catch(e) {
+                                            console.error(e);
+                                            alert("啟用失敗");
+                                        } finally {
+                                            setIsBlocking(false);
+                                        }
                                     }
                                 };
 
                                 const handleSaveInfo = async () => {
                                     setBlockText("儲存資料中..."); setIsBlocking(true);
-                                    await api.adminUpdateSupervisor({ 
-                                        name: item.name, 
-                                        uid: item.uid, // [修改] 傳遞 uid
-                                        isSupervisor: true, 
-                                        dept: currentEdit.dept, 
-                                        title: currentEdit.title,
-                                        region: currentEdit.region, // [新增]
-                                        adminName 
-                                    });
-                                    // 清除該人的編輯暫存
-                                    const newEdits = {...supEdits};
-                                    delete newEdits[item.name];
-                                    setSupEdits(newEdits);
-                                    
-                                    await fetchAllData(false);
-                                    setIsBlocking(false);
-                                    onAlert("資料已更新");
+                                    try {
+                                        await api.adminUpdateSupervisor({ 
+                                            name: item.name, 
+                                            uid: item.uid, 
+                                            isSupervisor: true, 
+                                            dept: currentEdit.dept, 
+                                            title: currentEdit.title,
+                                            region: currentEdit.region, 
+                                            adminName 
+                                        });
+
+                                        // [修正] 更新全域 allData (更新對應欄位)
+                                        setAllData((prev: any) => {
+                                            const list = prev.supervisor?.list || [];
+                                            const newList = list.map((s: any[]) => {
+                                                if (s[0] === item.name) {
+                                                    const row = [...s];
+                                                    row[1] = currentEdit.dept;
+                                                    row[2] = currentEdit.title;
+                                                    row[3] = currentEdit.region; // 這裡很重要
+                                                    return row;
+                                                }
+                                                return s;
+                                            });
+                                            return {
+                                                ...prev,
+                                                supervisor: {
+                                                    ...prev.supervisor,
+                                                    list: newList
+                                                }
+                                            };
+                                        });
+
+                                        const newEdits = {...supEdits};
+                                        delete newEdits[item.name];
+                                        setSupEdits(newEdits);
+                                        
+                                        await fetchAllData(false);
+                                        onAlert("資料已更新");
+                                    } catch (e) {
+                                        console.error(e);
+                                        alert("儲存失敗");
+                                    } finally {
+                                        setIsBlocking(false);
+                                    }
                                 };
 
                                 const handleEditChange = (field: 'dept' | 'title' | 'region', val: string) => {
