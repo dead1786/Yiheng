@@ -292,8 +292,47 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
         setIsBlocking(false);
     }
   };
-  // 順手補上地點刪除的前端串接
-  const handleDeleteLocation = (name: string) => onConfirm(`確定刪除地點 [${name}]？`, () => handleAction("刪除中...", api.adminUpdateLocation({ op: 'delete', targetName: name, adminName })));
+  // 順手補上地點刪除的前端串接 (改為樂觀更新，避免 Google Sheets 延遲導致刪除後又出現)
+  const handleDeleteLocation = (name: string) => {
+      onConfirm(`確定刪除地點 [${name}]？`, async () => {
+          setBlockText("刪除中..."); 
+          setIsBlocking(true);
+          try {
+              const res = await api.adminUpdateLocation({ op: 'delete', targetName: name, adminName });
+              
+              if (res.success) {
+                  // [修正] 強制更新前端狀態 (過濾掉被刪除的地點)
+                  const updateLogic = (prev: any) => {
+                      const list = prev.location?.list || [];
+                      return {
+                          ...prev,
+                          location: { 
+                              ...prev.location, 
+                              list: list.filter((row: any[]) => row[0] !== name) 
+                          }
+                      };
+                  };
+
+                  setAllData((prev: any) => {
+                      const newData = updateLogic(prev);
+                      // [關鍵] 同步更新 localStorage，避免重整後舊資料跑出來
+                      localStorage.setItem('admin_cache_all', JSON.stringify(newData));
+                      return newData;
+                  });
+                  
+                  onAlert("執行成功");
+                  // 不再呼叫 fetchAllData(false)，避免抓到快取的舊資料
+              } else {
+                  onAlert(res.message || "失敗");
+              }
+          } catch (e) {
+              console.error(e);
+              onAlert("連線錯誤");
+          } finally {
+              setIsBlocking(false);
+          }
+      });
+  };
 
   const handleAddShift = async () => {
     if (!newShift.name || !newShift.start || !newShift.end) return onAlert("請填寫資訊");
@@ -759,16 +798,20 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                                                 // 2. [修正] 更新全域 allData (從 supervisor.list 移除該員)
                                                 setAllData((prev: any) => {
                                                     const list = prev.supervisor?.list || [];
-                                                    return {
+                                                    const newData = {
                                                         ...prev,
                                                         supervisor: {
                                                             ...prev.supervisor,
                                                             list: list.filter((s: any[]) => s[0] !== item.name)
                                                         }
                                                     };
+                                                    // [關鍵] 同步更新 localStorage，確保重整後不會跳回來
+                                                    localStorage.setItem('admin_cache_all', JSON.stringify(newData));
+                                                    return newData;
                                                 });
                                                 
-                                                await fetchAllData(false);
+                                                // [修正] 移除 fetchAllData，避免抓到舊資料
+                                                onAlert("已移除主管權限");
                                             } catch(e) {
                                                 console.error(e);
                                                 alert("移除失敗");
@@ -787,16 +830,20 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                                                 const list = prev.supervisor?.list || [];
                                                 // 格式: [Name, Dept, Title, Region, UID]
                                                 const newRow = [item.name, "", "", "", item.uid || ""];
-                                                return {
+                                                const newData = {
                                                     ...prev,
                                                     supervisor: {
                                                         ...prev.supervisor,
                                                         list: [...list, newRow]
                                                     }
                                                 };
+                                                // [關鍵] 同步更新 localStorage
+                                                localStorage.setItem('admin_cache_all', JSON.stringify(newData));
+                                                return newData;
                                             });
 
-                                            await fetchAllData(false);
+                                            // [修正] 移除 fetchAllData
+                                            onAlert("已啟用主管權限");
                                         } catch(e) {
                                             console.error(e);
                                             alert("啟用失敗");

@@ -407,13 +407,14 @@ function handleLogin(name, password, deviceId) {
     }
   }
 
-  // [新增] 如果沒找到正確密碼，但有找到名字 (為了錯誤提示) -> 這裡簡化邏輯，若沒找到就當作帳號或密碼錯
-  // 但為了支援失敗次數累計，我們需要鎖定一個「目標」。
-  // 若同名且都密碼錯，我們鎖定「第一位」同名者來記過 (這是權衡之計)
+  // [新增] 如果沒找到正確密碼，但有找到名字或UID (為了錯誤提示與記錄失敗次數)
   if (!isStaff) {
      for (let i = 1; i < staffData.length; i++) {
-        if (String(staffData[i][0]).trim() === cleanName) {
-           staffRowIndex = i; // 鎖定第一位同名者
+        const rowName = String(staffData[i][0]).trim();
+        const rowUid = String(staffData[i][14] || "").trim();
+        // [修正] 支援用 UID 找到該員工來記過
+        if (rowName === cleanName || rowUid === cleanName) {
+           staffRowIndex = i;
            break;
         }
      }
@@ -475,7 +476,11 @@ function handleLogin(name, password, deviceId) {
           }
        }
        
+       // 重置錯誤次數 (Col 6~9)
        staffSheet.getRange(targetRow, 6, 1, 4).setValues([[0, "", "", 24]]);
+       // [新增] 更新最後上線時間 (Col 10, Index 9)
+       staffSheet.getRange(targetRow, 10).setValue(new Date());
+
        const status = row[3]; 
        const allowRemote = (row[4] === true || row[4] === "TRUE");
        
@@ -731,99 +736,93 @@ function getLastRawClockIn(uid) {
   return null;
 }
 
+// [新增] 輔助：解析分區字串 (支援全形/半形逗號、去除空白)
+function parseRegions(regionStr) {
+  if (!regionStr) return [];
+  return String(regionStr).split(/[,，]/).map(s => s.trim()).filter(s => s !== "");
+}
+
+// [新增] 輔助：權限交集比對 (主管權限 vs 目標分區)
+function checkRegionPermission(allowedRegions, targetRegionStr) {
+  if (allowedRegions.length === 0) return false; // 主管未設定分區，預設不給看
+  if (allowedRegions.includes("全區")) return true;
+  
+  const targetRegions = parseRegions(targetRegionStr);
+  if (targetRegions.length === 0) return false; // 目標無分區，嚴格模式下不給看
+  
+  // 只要兩邊有任何一個分區重疊，就允許
+  return allowedRegions.some(ar => targetRegions.includes(ar));
+}
+
 function handleAdminGetData(data) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const adminSheet = ss.getSheetByName(SHEET_ADMINS);
   const supSheet = ss.getSheetByName(SHEET_SUPERVISORS);
 
-  // 1. 強制身分驗證 (不信任前端傳來的 adminName)
-  // 必須透過 data.name / data.uid 重新確認權限
+  // 1. 強制身分驗證
   let isAdmin = false;
   let isSupervisor = false;
   let allowedRegions = [];
 
-  // (1) 檢查是否為管理員
+  // (1) 檢查管理員
   if (adminSheet) {
     const admins = adminSheet.getDataRange().getValues();
     for (let i = 1; i < admins.length; i++) {
-      // 這裡假設管理員登入時有傳送 name 與 pwd (或已驗證過 token，簡單起見對名與密)
-      // 若前端沒傳密碼，至少要對名字，但最好是像前面登入一樣嚴謹
-      // 這裡為求相容，假設前端已是驗證過的狀態，但我們仍需區分 "管理員" vs "主管"
-      if (admins[i][0] === data.name) {
+      if (admins[i][0] === data.name) { 
          isAdmin = true;
          break;
       }
     }
   }
 
-  // (2) 若非管理員，檢查是否為主管 (嚴格用 UID 驗證)
+  // (2) 若非管理員，檢查主管 (嚴格 UID 比對)
   if (!isAdmin && supSheet) {
       const supData = supSheet.getDataRange().getValues();
       for (let k = 1; k < supData.length; k++) {
           const sName = String(supData[k][0]).trim();
           const sUid = String(supData[k][4] || "").trim(); // E欄 UID
           
-          // 關鍵：優先比對 UID，若無則比對 Name
+          // 優先比對 UID，若無則比對 Name
           const isMatch = (data.uid && data.uid === sUid) || (sName === data.name);
           
           if (isMatch) {
               isSupervisor = true;
-              // 讀取 D 欄 (Index 3) 分區
-              const regionRaw = supData[k][3];
-              if (regionRaw) {
-                  allowedRegions = String(regionRaw).split(',').map(s => s.trim()).filter(s => s !== "");
-              }
+              // 解析 D 欄 (Index 3) 分區權限
+              allowedRegions = parseRegions(supData[k][3]);
               break;
           }
       }
   }
 
-  // 若兩者皆非，直接踢出 (防止偽造請求)
+  // 若兩者皆非，拒絕存取
   if (!isAdmin && !isSupervisor) {
-      return { success: false, message: "無權限存取資料" };
+      return { success: false, message: "無權限" };
   }
 
-  // 輔助函式：檢查某個分區是否在允許列表中
-  const isRegionAllowed = (r) => {
-      if (isAdmin) return true; // 管理員看全部
-      if (allowedRegions.length === 0) return true; // 主管若無設定分區，預設可能為全區? 不，建議預設無權限，這裡視你的需求，若為空代表全區則 return true
-      if (!r) return false; // 無分區資料，主管不可見 (嚴格模式)
-      // 支援 "北區" 或 "全區" 關鍵字
-      return allowedRegions.some(ar => ar === "全區" || ar === r);
+  // 內部讀取函式
+  const fetchInternal = (type) => {
+     return getSheetDataInternal(ss, type, allowedRegions, isAdmin);
   };
 
-  // 2. 遞迴處理 allData 請求
   if (data.dataType === 'all') {
-    // 為了避免遞迴時重複驗證，我們可以傳遞一個內部標記，但為了安全，讓它每次都驗證也無妨(效能差異不大)
-    // 或者我們直接在這裡組裝，不遞迴呼叫 (比較乾淨)
-    
-    // 這裡我們直接展開，避免遞迴造成的參數傳遞問題
-    const fetchType = (type) => {
-        // 偽造一個 data 物件傳給自己，但這會造成無限遞迴如果沒處理好
-        // 所以最簡單的方式是：直接呼叫通用邏輯
-        return getSheetDataInternal(ss, type, allowedRegions, isAdmin, data.uid); 
-    };
-
     return {
       success: true,
       allData: {
-        staff: fetchType('staff'),
-        line: fetchType('line'),
-        location: fetchType('location'),
-        record: fetchType('record'),
-        log: fetchType('log'),
-        shift: fetchType('shift'),
-        supervisor: fetchType('supervisor')
+        staff: fetchInternal('staff'),
+        line: fetchInternal('line'),
+        location: fetchInternal('location'),
+        record: fetchInternal('record'),
+        log: fetchInternal('log'),
+        shift: fetchInternal('shift'),
+        supervisor: fetchInternal('supervisor')
       }
     };
   }
 
-  // 單一請求處理
-  return getSheetDataInternal(ss, data.dataType, allowedRegions, isAdmin, data.uid);
+  return fetchInternal(data.dataType);
 }
 
-// [新增] 內部核心讀取函式 (將邏輯抽離，方便 'all' 模式呼叫)
-function getSheetDataInternal(ss, dataType, allowedRegions, isAdmin, requestorUid) {
+function getSheetDataInternal(ss, dataType, allowedRegions, isAdmin) {
   let sheetName = "";
   if (dataType === 'staff') sheetName = SHEET_STAFF;
   else if (dataType === 'line') sheetName = SHEET_LINE_IDS;
@@ -842,7 +841,8 @@ function getSheetDataInternal(ss, dataType, allowedRegions, isAdmin, requestorUi
   let headers = allData[0];
   let list = [];
 
-  // 準備分區過濾對照表 (僅在需要時)
+  // 準備員工分區對照表 (Map: UID/Name -> Region)
+  // 僅在非管理員且撈取 Record/Log 時需要
   let staffRegionMap = {};
   if (!isAdmin && allowedRegions.length > 0 && (dataType === 'record' || dataType === 'log')) {
       const staffSheet = ss.getSheetByName(SHEET_STAFF);
@@ -858,12 +858,10 @@ function getSheetDataInternal(ss, dataType, allowedRegions, isAdmin, requestorUi
       }
   }
 
-  // 輔助檢查函式
-  const isRegionAllowed = (r) => {
+  // 檢查是否可見的封裝函式
+  const isAllowed = (targetRegion) => {
       if (isAdmin) return true;
-      if (allowedRegions.includes("全區")) return true;
-      if (!r) return false;
-      return allowedRegions.some(ar => ar === r);
+      return checkRegionPermission(allowedRegions, targetRegion);
   };
 
   if (dataType === 'staff') {
@@ -872,9 +870,10 @@ function getSheetDataInternal(ss, dataType, allowedRegions, isAdmin, requestorUi
      const rawList = allData.slice(1);
      
      list = rawList.filter(row => {
-         // 管理員看全部，主管看分區
-         return isRegionAllowed(row[13]); 
+         // [過濾] 員工名單：檢查 N 欄 (Index 13)
+         return isAllowed(row[13]); 
      }).map(row => {
+         // Mapping 輸出
          const lockedTime = row[7] ? new Date(row[7]).getTime() : 0;
          const isLocked = lockedTime > now;
          const deviceId = row[10];
@@ -891,82 +890,26 @@ function getSheetDataInternal(ss, dataType, allowedRegions, isAdmin, requestorUi
 
      if (!isAdmin && allowedRegions.length > 0) {
          targetData = targetData.filter(row => {
-             // 1. 優先檢查 R 欄 (Index 17, 僅 record 有)
+             // 1. [Record] 優先檢查 R 欄 (Index 17)
              if (dataType === 'record' && row[17]) {
-                 return isRegionAllowed(row[17]);
+                 return isAllowed(row[17]);
              }
-             // 2. 反查 Map
-             let key = (dataType === 'record') ? (row[16] || row[3]) : row[1]; // UID or Name
+             // 2. [Fallback] 反查 Map (用 UID 或 Name)
+             let key = (dataType === 'record') ? (row[16] || row[3]) : row[1];
              if (!staffRegionMap[key]) return false; // 找不到人就不給看
-             return isRegionAllowed(staffRegionMap[key]);
+             return isAllowed(staffRegionMap[key]);
          });
      }
-     list = targetData.slice(-100).reverse(); // 取最後100筆並反轉
+     list = targetData.slice(-100).reverse(); // 取最後100筆
   }
   else {
-     // 其他資料表 (Line, Shift, Location)
-     // 這些通常不用分區過濾，或者全部給
+     // 其他資料表直接給
      list = allData.slice(1);
   }
 
   return { success: true, headers: headers, list: list };
 }
 
-// [新增] 輔助函式：取得某人的分區權限 (Admin/Supervisor D欄)
-function getRegionsForUser(name) {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    // 1. 查管理員表
-    const adminSheet = ss.getSheetByName(SHEET_ADMINS);
-    if(adminSheet) {
-        const data = adminSheet.getDataRange().getDisplayValues();
-        for(let i=1; i<data.length; i++) {
-            if(data[i][0] === name) {
-                const r = data[i][3]; // D欄
-                if(r) return r.split(',').map(s=>s.trim()).filter(s=>s!=="");
-            }
-        }
-    }
-    // 2. 查主管表
-    const supSheet = ss.getSheetByName(SHEET_SUPERVISORS);
-    if(supSheet) {
-        const data = supSheet.getDataRange().getDisplayValues();
-        for(let i=1; i<data.length; i++) {
-            if(data[i][0] === name) {
-                const r = data[i][3]; // D欄
-                if(r) return r.split(',').map(s=>s.trim()).filter(s=>s!=="");
-            }
-        }
-    }
-    return []; // 無設定或找不到
-}
-
-// [新增] 輔助函式：取得某人的分區權限
-function getRegionsForUser(name) {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    // 1. 查管理員表
-    const adminSheet = ss.getSheetByName(SHEET_ADMINS);
-    if(adminSheet) {
-        const data = adminSheet.getDataRange().getDisplayValues();
-        for(let i=1; i<data.length; i++) {
-            if(data[i][0] === name) {
-                const r = data[i][3]; // D欄
-                if(r) return r.split(',').map(s=>s.trim()).filter(s=>s!=="");
-            }
-        }
-    }
-    // 2. 查主管表
-    const supSheet = ss.getSheetByName(SHEET_SUPERVISORS);
-    if(supSheet) {
-        const data = supSheet.getDataRange().getDisplayValues();
-        for(let i=1; i<data.length; i++) {
-            if(data[i][0] === name) {
-                const r = data[i][3]; // D欄
-                if(r) return r.split(',').map(s=>s.trim()).filter(s=>s!=="");
-            }
-        }
-    }
-    return []; // 無設定或找不到
-}
 
 function handleAdminUpdateShift(data) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_SHIFTS);
