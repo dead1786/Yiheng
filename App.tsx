@@ -134,7 +134,10 @@ const App: React.FC = () => {
   }, [user]);
 
   const handleLogin = (userData: User) => {
-    const userWithTime = { ...userData, loginTime: new Date().getTime() };
+    // [修正] 優先使用後端傳來的 loginTime (伺服器時間)，若無才使用本機時間 (相容舊版)
+    const finalLoginTime = userData.loginTime || new Date().getTime();
+    const userWithTime = { ...userData, loginTime: finalLoginTime };
+    
     setUser(userWithTime);
     localStorage.setItem('yh_app_session', JSON.stringify(userWithTime));
     // [修改] 管理員或主管都預設開啟後台模式 (LoginView 會消失)

@@ -63,7 +63,8 @@ export const LoginView = ({ onLogin }: Props) => {
         onLogin({ 
             name: res.name, 
             uid: res.uid,
-            region: res.region, // [新增] 接收個人分區
+            region: res.region,
+            loginTime: res.loginTime, 
             needReset: res.needReset, 
             allowRemote: res.allowRemote, 
             isAdmin: res.isAdmin,
