@@ -245,9 +245,35 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
       );
   };
 
-  // 解鎖維持原樣或照樣升級皆可，這裡先保留原邏輯，但建議傳 UID
   const handleUnlockStaff = (name: string) => onConfirm(`解除 [${name}] 鎖定？`, () => handleAction("解鎖中...", api.adminUnlockStaff(name, adminName)));
-  const handleDeleteStaff = () => { if(editingStaff) onConfirm(`刪除員工 [${editingStaff[0]}]？`, async () => { if(await handleAction("刪除中...", api.adminUpdateStaff({ op: 'delete', targetUid: editingStaff[9], adminName }))) setEditingStaff(null); }); };
+  
+  const handleDeleteStaff = () => { 
+      if(editingStaff) {
+          onConfirm(`刪除員工 [${editingStaff[0]}]？`, async () => { 
+              // 1. 執行後端刪除
+              const success = await handleAction("刪除中...", api.adminUpdateStaff({ op: 'delete', targetUid: editingStaff[9], adminName }));
+              
+              if(success) {
+                  // 2. [新增] 前端直接移除該筆資料，不用等重抓
+                  setAllData((prev: any) => {
+                      const list = prev.staff?.list || [];
+                      // 過濾掉 UID (Index 9) 或 姓名 (Index 0) 相符的資料
+                      const newList = list.filter((row: any[]) => {
+                          if (editingStaff[9]) return row[9] !== editingStaff[9];
+                          return row[0] !== editingStaff[0];
+                      });
+                      
+                      const newData = { ...prev, staff: { ...prev.staff, list: newList } };
+                      // 同步更新快取
+                      localStorage.setItem('admin_cache_all', JSON.stringify(newData));
+                      return newData;
+                  });
+                  setEditingStaff(null); 
+              }
+          }); 
+      }
+  };
+
   const handleSaveStaff = async () => {
     if (!staffForm.name || !staffForm.password) return onAlert("姓名與密碼必填");
     if (staffForm.password !== '******') {
@@ -255,7 +281,60 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
           return onAlert("密碼格式錯誤：需為至少 4 位數字，且開頭不能為 0");
        }
     }
-    if(await handleAction("儲存中...", api.adminUpdateStaff({ op: isAddingStaff ? 'add' : 'edit', adminName, targetUid: editingStaff ? editingStaff[9] : null, newData: staffForm }))) { setIsAddingStaff(false); setEditingStaff(null); }
+
+    // 執行後端 API
+    const success = await handleAction(
+        "儲存中...", 
+        api.adminUpdateStaff({ 
+            op: isAddingStaff ? 'add' : 'edit', 
+            adminName, 
+            targetUid: editingStaff ? editingStaff[9] : null, 
+            newData: staffForm 
+        })
+    );
+
+    if(success) { 
+        // [新增] 前端即時更新邏輯
+        setAllData((prev: any) => {
+            const list = prev.staff?.list || [];
+            
+            // 組合新的一行資料 (對應 Sheet 欄位順序)
+            // [姓名, 密碼(隱藏), LineID, 需重設, 遠端, 狀態, 裝置, 班別, 分區, UID]
+            const newRow = [
+                staffForm.name, 
+                "******", 
+                staffForm.lineId, 
+                staffForm.needReset, 
+                staffForm.allowRemote, 
+                editingStaff ? editingStaff[5] : "正常", // 狀態維持原樣
+                editingStaff ? editingStaff[6] : "未綁定", // 裝置維持原樣
+                staffForm.shift,
+                staffForm.region,
+                editingStaff ? editingStaff[9] : "" // 新增時暫無 UID，等下次同步
+            ];
+
+            let newList;
+            if (editingStaff) {
+                // 編輯模式：取代舊資料
+                newList = list.map((row: any[]) => {
+                    // 比對 UID (Index 9) 或 姓名 (Index 0)
+                    const isMatch = (editingStaff[9] && row[9] === editingStaff[9]) || row[0] === editingStaff[0];
+                    return isMatch ? newRow : row;
+                });
+            } else {
+                // 新增模式：加到最前面
+                newList = [newRow, ...list];
+            }
+
+            const newData = { ...prev, staff: { ...prev.staff, list: newList } };
+            // 更新快取
+            localStorage.setItem('admin_cache_all', JSON.stringify(newData));
+            return newData;
+        });
+
+        setIsAddingStaff(false); 
+        setEditingStaff(null); 
+    }
   };
   const handleSaveLocation = async () => {
     if (!newLoc.name || !newLoc.lat) return onAlert("請填寫資訊");

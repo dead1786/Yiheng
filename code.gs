@@ -40,15 +40,12 @@ function doPost(e) {
   if (action === "login") return responseJSON(handleLogin(postData.name, postData.password, postData.deviceId));
   if (action === "changePassword") return responseJSON(handleChangePassword(postData.name, postData.newPassword));
   if (action === "updatePassword") return responseJSON(handleUpdatePassword(postData));
-  // [新增] 忘記密碼相關路由
   if (action === "requestReset") return responseJSON(handleRequestReset(postData.name));
-  // [新增] 單獨檢查驗證碼路由
+  if (action === "autoLogin") return responseJSON(handleAutoLogin(postData.uid, postData.deviceId));
   if (action === "checkResetCode") return responseJSON(handleCheckResetCode(postData.name, postData.code));
   if (action === "verifyReset") return responseJSON(handleVerifyReset(postData.name, postData.code, postData.newPassword));
-  
   if (action === "clockIn") return responseJSON(handleClockIn(postData));
   if (action === "getHistory") return responseJSON(handleGetHistory(postData.uid, postData.loginTime));
-  // [修改] 傳入 name
   if (action === "checkStatus") return responseJSON(handleCheckStatus(postData.uid, postData.loginTime, postData.name));
   if (action === "getLocations") return responseJSON(getLocations());
   
@@ -543,6 +540,7 @@ function handleLogin(name, password, deviceId) {
   return { success: false, message: "帳號或密碼錯誤" };
 }
 
+
 function handleClockIn(data) {
   // [修改] 無論 data.loginTime 是否存在，都要執行 checkSessionValid (若不存在會被上面的邏輯擋下)
   if (!checkSessionValid(data.uid, data.loginTime)) {
@@ -957,7 +955,8 @@ function handleAdminUpdateStaff(data) {
 
     // [新增] 自動發送 UID 給新員工
     if (data.newData.lineId) {
-       pushLine(data.newData.lineId, `👋 歡迎加入！\n\n您的員工 UID 為：${newUID}\n預設密碼：${data.newData.password}\n\n⚠️ 首次登入請務必使用「UID」+「密碼」登入系統。`);
+       // [修改] 附帶自動登入連結 (Auto Login Link)
+       pushLine(data.newData.lineId, `👋 歡迎加入！\n\n您的員工 UID 為：${newUID}\n預設密碼：${data.newData.password}\n\n🚀 快速登入連結 (綁定手機後可自動登入)：\nhttps://yiheng.vercel.app/?uid=${newUID}\n\n(首次點擊需輸入密碼以綁定此手機)`);
     }
 
     logAdminAction(adminName, "新增員工", `新增了 ${data.newData.name} (UID:${newUID})`);
@@ -1454,9 +1453,13 @@ function adminSendPasswords() {
     const data = sheet.getDataRange().getDisplayValues();
     for (let i = 1; i < data.length; i++) { 
         if (data[i][2] && data[i][2].length > 10 && data[i][1]) { 
-            pushLine(data[i][2], `👋 哈囉 ${data[i][0]}，這是您的打卡系統初始密碼：1234\n\n🔑${data[i][1]}\n\n請儘快登入系統並修改密碼。\n\n連結：https://yiheng.vercel.app/。`);
+            // [修改] 取得 UID (第 15 欄 / Index 14)
+            const thisUid = data[i][14];
+            const link = thisUid ? `https://yiheng.vercel.app/?uid=${thisUid}` : `https://yiheng.vercel.app/`;
+            
+            pushLine(data[i][2], `👋 哈囉 ${data[i][0]}，這是您的打卡系統憑證。\n\n🔑密碼：${data[i][1]}\nUID：${thisUid || "無"}\n\n🚀 快速登入連結：\n${link}\n\n(請點擊連結並登入以綁定裝置)`);
         } 
-    } 
+    }
 }
 
 // ==========================================
@@ -1530,6 +1533,105 @@ function handleCheckResetCode(name, code) {
   }
   
   return { success: true, message: "驗證成功" };
+}
+
+// [新增] 處理自動登入 (UID + DeviceID 驗證)
+function handleAutoLogin(uid, deviceId) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_STAFF);
+  const data = sheet.getDataRange().getValues();
+  
+  // 1. 尋找 UID 對應的員工
+  let targetRow = null;
+  let rowIndex = -1;
+  
+  for (let i = 1; i < data.length; i++) {
+    // 檢查 O 欄 (Index 14) UID
+    if (String(data[i][14]) === String(uid)) {
+       targetRow = data[i];
+       rowIndex = i;
+       break;
+    }
+  }
+
+  if (!targetRow) return { success: false, message: "無效的連結 (UID 不存在)" };
+
+  // 2. 檢查帳號狀態
+  const name = targetRow[0];
+  const storedDeviceId = String(targetRow[10] || "").trim(); // K 欄 (Index 10)
+  const isLocked = (targetRow[7] ? new Date(targetRow[7]).getTime() : 0) > new Date().getTime();
+  
+  if (isLocked) return { success: false, message: "帳號已被鎖定，無法自動登入" };
+
+  // 3. 核心安全檢查：裝置 ID 是否吻合
+  // 如果資料庫裡的 DeviceID 是空的 -> 代表尚未綁定 -> 拒絕自動登入 (要求手動登入一次以綁定)
+  // 如果資料庫裡的 DeviceID 與傳來的不符 -> 代表換裝置或別人點擊 -> 拒絕自動登入
+  if (!storedDeviceId || storedDeviceId !== deviceId) {
+      return { success: false, message: "首次使用此裝置或裝置已變更，請手動輸入密碼登入以完成綁定。" };
+  }
+
+  // 4. 驗證通過，組裝 User 物件 (邏輯同 handleLogin)
+  // 讀取班別
+  let shiftInfo = null;
+  const shiftName = targetRow[11];
+  if (shiftName) {
+      const shiftSheet = ss.getSheetByName(SHEET_SHIFTS);
+      if (shiftSheet) {
+        const shifts = shiftSheet.getDataRange().getDisplayValues();
+        for (let k = 1; k < shifts.length; k++) {
+            if (shifts[k][0] === shiftName) {
+                shiftInfo = { name: shifts[k][0], start: shifts[k][1], end: shifts[k][2] };
+                break;
+            }
+        }
+      }
+  }
+
+  // 讀取主管權限
+  let isSupervisor = false;
+  let supRegions = [];
+  const supSheet = ss.getSheetByName(SHEET_SUPERVISORS);
+  if (supSheet) {
+      const sData = supSheet.getDataRange().getValues();
+      for (let k = 1; k < sData.length; k++) {
+          if (String(sData[k][4]) === String(uid)) { // 比對 UID
+             isSupervisor = true;
+             const sr = sData[k][3];
+             if (sr) supRegions = String(sr).split(',').map(s=>s.trim()).filter(s=>s!=="");
+             break;
+          }
+      }
+  }
+
+  // 檢查是否為管理員 (通常管理員不會用這招，但以防萬一)
+  const adminSheet = ss.getSheetByName(SHEET_ADMINS);
+  let isAdmin = false;
+  let adminRegions = [];
+  if (adminSheet) {
+      const aData = adminSheet.getDataRange().getValues();
+      for (let j = 1; j < aData.length; j++) {
+         if (String(aData[j][0]) === name) { isAdmin = true; break; }
+      }
+  }
+
+  // 更新最後上線時間
+  sheet.getRange(rowIndex + 1, 10).setValue(new Date());
+
+  return {
+     success: true,
+     user: {
+        name: name,
+        uid: uid,
+        loginTime: new Date().getTime(),
+        needReset: (targetRow[3] === true || targetRow[3] === "TRUE"),
+        allowRemote: (targetRow[4] === true || targetRow[4] === "TRUE") || isSupervisor || isAdmin,
+        isAdmin: isAdmin,
+        isSupervisor: isSupervisor,
+        shift: shiftInfo,
+        region: targetRow[13] || "",
+        regions: [...new Set([...(targetRow[13] ? targetRow[13].split(',') : []), ...adminRegions, ...supRegions])].filter(s=>s!=="")
+     }
+  };
 }
 
 // ==========================================
