@@ -95,26 +95,33 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
   const fetchAllData = async (showLoading = false) => {
     // 1. 若需要 Loading 則開啟遮罩
     if (showLoading) { 
-        setBlockText("資料同步中..."); 
+        setBlockText("正在下載最新資料..."); 
         setIsBlocking(true); 
     } 
 
     try {
-        console.log("正在從伺服器同步最新資料...");
-        // [修改] 傳遞 adminName 與 uid 進行身分驗證
+        console.log("🚀 [同步] 開始向伺服器請求最新資料...", new Date().toLocaleTimeString());
+        
+        // [修正] 呼叫後端 API (現在 API 已經有防快取機制)
         const res = await api.adminGetData('all', user.name, user.uid);
         
         // 2. 只有當成功且真的有資料回傳時，才更新前端
         if (res.success && res.allData) {
-            console.log("伺服器資料同步成功", res.allData);
+            console.log("✅ [同步] 成功取得最新資料 (1/29更新)", res.allData);
+            
+            // 更新狀態
             setAllData(res.allData);
+            
             // [關鍵] 強制更新快取，確保下次重新整理也是最新的
             localStorage.setItem('admin_cache_all', JSON.stringify(res.allData));
+            
+            if (showLoading) onAlert("資料已更新至最新狀態！");
         } else {
-            console.warn("同步失敗或無資料回傳:", res);
+            console.warn("⚠️ [同步] 伺服器回傳失敗或無資料:", res);
+            if (showLoading) onAlert(res.message || "同步失敗，請稍後再試");
         }
     } catch (e) {
-        console.error("連線錯誤:", e);
+        console.error("❌ [同步] 連線錯誤:", e);
         if (showLoading) onAlert("連線錯誤，無法更新資料");
     } finally {
         // [關鍵] 無論成功或失敗，只要原本有開 Loading，最後都要關掉

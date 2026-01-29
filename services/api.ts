@@ -2,8 +2,15 @@ const API_URL = import.meta.env.VITE_API_URL || "";
 
 async function post(action: string, data: any = {}) {
   try {
-    const response = await fetch(API_URL, {
+    // [修正] 加入時間戳記 (t=...) 以防止 Google 伺服器回傳快取的舊資料
+    // 這會強制瀏覽器每次都發送新的請求
+    const separator = API_URL.includes('?') ? '&' : '?';
+    const noCacheUrl = `${API_URL}${separator}t=${new Date().getTime()}`;
+
+    const response = await fetch(noCacheUrl, {
       method: "POST",
+      // [修正] 使用 no-cache 模式確保更強制的更新
+      cache: "no-store", 
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ action, ...data }),
     });
