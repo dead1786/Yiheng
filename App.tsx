@@ -58,6 +58,50 @@ const App: React.FC = () => {
   const showAlert = (msg: string) => { setModalConfig({ isOpen: true, type: 'alert', message: msg, onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false })) }); };
   const showConfirm = (msg: string, onYes: () => void) => { setModalConfig({ isOpen: true, type: 'confirm', message: msg, onConfirm: () => { setModalConfig(prev => ({ ...prev, isOpen: false })); onYes(); }, onCancel: () => setModalConfig(prev => ({ ...prev, isOpen: false })) }); };
 
+  // [新增] 處理網址自動登入邏輯 (Auto Login Link)
+  useEffect(() => {
+    const performAutoLogin = async () => {
+      // 1. 檢查網址是否有 uid 參數
+      const params = new URLSearchParams(window.location.search);
+      const uidParam = params.get('uid');
+
+      if (uidParam) {
+         // 2. 取得或生成 Device ID (必須與 LoginView 邏輯一致)
+         let deviceId = localStorage.getItem('yh_device_id');
+         if (!deviceId) {
+            deviceId = 'dev-' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+            localStorage.setItem('yh_device_id', deviceId);
+         }
+
+         // 3. 如果目前沒有登入，才執行自動登入
+         const saved = localStorage.getItem('yh_app_session');
+         if (!saved) {
+             setIsLoading(true);
+             // 清除網址參數，避免看起來很亂
+             window.history.replaceState({}, '', '/');
+             
+             try {
+                const res = await api.autoLogin(uidParam, deviceId || '');
+                if (res.success) {
+                    // 自動登入成功
+                    handleLogin(res.user); 
+                    // 這裡不需 showAlert，直接進去最順暢
+                } else {
+                    // 自動登入失敗 (可能是換手機或裝置未綁定)
+                    // 顯示訊息，停留在登入頁讓使用者手動輸入一次以綁定
+                    showAlert(`🔗 連結識別成功！\n但為了安全，${res.message || "請手動登入一次以綁定此裝置。"}`);
+                }
+             } catch(e) {
+                console.error("Auto login error", e);
+             }
+             setIsLoading(false);
+             return; // 中斷後續的 session 檢查
+         }
+      }
+    };
+    performAutoLogin();
+  }, []);
+
   useEffect(() => {
     const saved = localStorage.getItem('yh_app_session');
     if (saved) {

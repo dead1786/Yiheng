@@ -24,17 +24,11 @@ export const api = {
   requestReset: (name: string) => post("requestReset", { name }),
   checkResetCode: (name: string, code: string) => post("checkResetCode", { name, code }),
   verifyReset: (name: string, code: string, newPassword: string) => post("verifyReset", { name, code, newPassword }),
-
+  autoLogin: (uid: string, deviceId: string) => post("autoLogin", { uid, deviceId }),
   getLocations: () => post("getLocations"),
-  
   clockIn: (data: any) => post("clockIn", data),
-  // [修改] 改傳 uid
   getHistory: (uid: string, loginTime?: number) => post("getHistory", { uid, loginTime }),
-
-  // [修改] 增加 name 參數 (讓純管理員能通過驗證)
   checkStatus: (uid: string, loginTime?: number, name?: string) => post("checkStatus", { uid, loginTime, name }),
-  
-  // [修改] 增加 uid 參數，用於後端精準驗證主管身分
   adminGetData: (dataType: 'staff' | 'line' | 'location' | 'record' | 'log' | 'all' | 'shift', adminName?: string, uid?: string) => post("adminGetData", { dataType, adminName, uid }),
   
   adminUpdateLocation: (data: any) => post("adminUpdateLocation", data),

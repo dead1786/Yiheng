@@ -221,9 +221,10 @@ function handleCheckStatus(uid, loginTime, name) {
   return { success: false, status: 'force_logout', message: "帳號資料異常或已刪除。" };
 }
 
-// [修改] 改用 UID 檢查 session
+// [修改後] 2. checkSessionValid: 加強檢查，若無時間則視為失效
 function checkSessionValid(uid, clientLoginTime) {
-  if (!clientLoginTime) return true;
+  // [安全性修正] 如果沒有提供登入時間，視為非法請求，直接踢出
+  if (!clientLoginTime) return false;
   
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_STAFF);
@@ -506,11 +507,9 @@ function handleLogin(name, password, deviceId) {
          success: true, 
          name: String(staffData[staffRowIndex][0]).trim(),
          uid: matchedUserUID, // [新增] 回傳 UID
+         loginTime: new Date().getTime(), // [新增] 強制使用伺服器時間作為登入時間
          needReset: (status === true || status === "TRUE"),
-         // [修改] 3. 主管也視為擁有遠端權限
-         allowRemote: allowRemote || isAdmin || isSupervisor, 
-         isAdmin: isAdmin,
-         // [新增] 4. 回傳主管狀態
+         // ... (略)
          isSupervisor: isSupervisor, 
          shift: shiftInfo,
          region: row[13] || "", // [新增] 回傳個人分區 (N欄) 供前端顯示
@@ -545,11 +544,11 @@ function handleLogin(name, password, deviceId) {
 }
 
 function handleClockIn(data) {
-  // [修改] 傳入 uid 給 checkSessionValid
-  if (data.loginTime && !checkSessionValid(data.uid, data.loginTime)) {
+  // [修改] 無論 data.loginTime 是否存在，都要執行 checkSessionValid (若不存在會被上面的邏輯擋下)
+  if (!checkSessionValid(data.uid, data.loginTime)) {
     return { success: false, status: 'force_logout', message: "管理者已強制登出您的帳號，請重新登入。" };
   }
-
+  
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_RECORDS);
   const locSheet = ss.getSheetByName(SHEET_LOCATIONS);
