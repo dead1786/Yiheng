@@ -33,7 +33,7 @@ const LoadingOverlay = () => (
     <div className="bg-black/80 text-white px-8 py-6 rounded-2xl shadow-2xl flex flex-col items-center gap-4">
       <Loader2 className="animate-spin text-blue-400 w-10 h-10" />
       <span className="font-bold tracking-widest text-lg">處理中...</span>
-    </div>{/* Map Footer Info */}
+    </div>
   </div>
 );
 

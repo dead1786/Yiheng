@@ -63,10 +63,10 @@ function doPost(e) {
   if (action === "adminGetSheetList") return responseJSON(handleAdminGetSheetList());
   
 // ========== 申請系統 API ==========
-if (action === "submitMakeupRequest") return responseJSON(handleSubmitMakeupRequest(payload));
-if (action === "submitLeaveRequest") return responseJSON(handleSubmitLeaveRequest(payload));
-if (action === "getPendingRequests") return responseJSON(handleGetPendingRequests(payload));
-if (action === "approveRequest") return responseJSON(handleApproveRequest(payload));
+  if (action === "submitMakeupRequest") return responseJSON(handleSubmitMakeupRequest(postData));
+  if (action === "submitLeaveRequest") return responseJSON(handleSubmitLeaveRequest(postData));
+  if (action === "getPendingRequests") return responseJSON(handleGetPendingRequests(postData));
+  if (action === "approveRequest") return responseJSON(handleApproveRequest(postData));
   if (action === "adminDownloadExcel") return responseJSON(handleAdminDownloadExcel(postData));
   return responseJSON({ success: false, message: "未知請求" });
 }
@@ -254,7 +254,7 @@ function checkSessionValid(uid, clientLoginTime) {
 function handleAdminGetSheetList() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const allSheets = ss.getSheets();
-  const systemSheets = [SHEET_STAFF, SHEET_ADMINS, SHEET_LOCATIONS, SHEET_RECORDS, SHEET_LINE_IDS, SHEET_ADMIN_LOGS, SHEET_SHIFTS, "line bot設定", "北區維運班表", "國定假日", "待處理","當日出勤","當月統計","主管名單"];
+  const systemSheets = [SHEET_STAFF, SHEET_ADMINS, SHEET_LOCATIONS, SHEET_RECORDS, SHEET_LINE_IDS, SHEET_ADMIN_LOGS, SHEET_SHIFTS, "line bot設定", "北區維運班表", "國定假日", "待處理","當日出勤","當月統計","主管名單","補打卡申請"];
   let list = [];
   list.push({ name: SHEET_CURRENT_MONTH, label: `${SHEET_CURRENT_MONTH} (當前)` });
   allSheets.forEach(sheet => {
@@ -1772,6 +1772,12 @@ function handleSubmitMakeupRequest(data) {
     const { uid, name, date, type, reason } = data;
     const ss = SpreadsheetApp.openById(SHEET_ID);
     
+    // Debug: 檢查傳入的資料
+    Logger.log("收到申請資料：uid=" + uid + ", name=" + name);
+    if (!uid) {
+      return { success: false, message: "系統錯誤：UID 為空值" };
+    }
+    
     // 1. 取得或建立「補打卡申請」工作表
     let sheet = ss.getSheetByName("補打卡申請");
     if (!sheet) {
@@ -1781,16 +1787,29 @@ function handleSubmitMakeupRequest(data) {
     }
     
     // 2. 取得員工班別資訊
-    const staffSheet = ss.getSheetByName("人員資料");
-    const staffData = staffSheet.getDataRange().getValues();
-    const staffRow = staffData.find(row => row[1] === uid);
-    if (!staffRow) return { success: false, message: "找不到員工資料" };
+    const staffSheet = ss.getSheetByName(SHEET_STAFF);
+    if (!staffSheet) {
+      return { success: false, message: "系統錯誤：找不到員工管理工作表" };
+    }
     
-    const region = staffRow[2]; // 分區
-    const shiftName = staffRow[7]; // 班別名稱
+    const staffData = staffSheet.getDataRange().getValues();
+    Logger.log("工作表總行數：" + staffData.length);
+    
+    // Debug: 列印前 5 筆資料的 UID
+    for (let i = 1; i < Math.min(6, staffData.length); i++) {
+      Logger.log("第" + i + "行 UID：" + staffData[i][1]);
+    }
+    
+    const staffRow = staffData.find(row => row[14] === uid);  // UID 在第 14 欄
+    if (!staffRow) {
+      return { success: false, message: "找不到員工資料（UID: " + uid + "）" };
+    }
+    
+    const region = staffRow[13]; // 分區在第 13 欄
+    const shiftName = staffRow[11]; // 班別在第 11 欄
     
     // 3. 取得班別時間
-    const shiftSheet = ss.getSheetByName("班別設定");
+    const shiftSheet = ss.getSheetByName(SHEET_SHIFTS);
     const shiftData = shiftSheet.getDataRange().getValues();
     const shiftRow = shiftData.find(row => row[0] === shiftName);
     if (!shiftRow) return { success: false, message: "找不到班別資料" };
@@ -1852,12 +1871,12 @@ function handleSubmitLeaveRequest(data) {
     }
     
     // 2. 取得員工分區
-    const staffSheet = ss.getSheetByName("人員資料");
+    const staffSheet = ss.getSheetByName(SHEET_STAFF);
     const staffData = staffSheet.getDataRange().getValues();
-    const staffRow = staffData.find(row => row[1] === uid);
+    const staffRow = staffData.find(row => row[14] === uid);  // UID 在第 14 欄
     if (!staffRow) return { success: false, message: "找不到員工資料" };
     
-    const region = staffRow[2];
+    const region = staffRow[13];  // 分區在第 13 欄
     
     // 3. 生成申請ID
     const requestId = "LV-" + new Date().getTime();
@@ -2016,31 +2035,60 @@ function handleApproveRequest(data) {
  */
 function sendLineNotificationToSupervisors(region, message) {
   try {
-    // ⚠️ 請在 code.gs 最上方加入這行：
-    // const LINE_CHANNEL_ACCESS_TOKEN = "你的 Channel Access Token";
-    
     if (typeof LINE_CHANNEL_ACCESS_TOKEN === 'undefined') {
       Logger.log("LINE_CHANNEL_ACCESS_TOKEN 未設定，略過通知");
       return;
     }
     
     const ss = SpreadsheetApp.openById(SHEET_ID);
-    const staffSheet = ss.getSheetByName("人員資料");
+    
+    // 1. 從主管名單找出該分區的所有主管
+    const supervisorSheet = ss.getSheetByName(SHEET_SUPERVISORS);
+    if (!supervisorSheet) {
+      Logger.log("找不到主管名單工作表，略過通知");
+      return;
+    }
+    
+    const supervisorData = supervisorSheet.getDataRange().getValues();
+    const regionSupervisors = [];
+    
+    // 找出該分區的主管（分區欄位可能包含多個分區，用逗號分隔）
+    for (let i = 1; i < supervisorData.length; i++) {
+      const row = supervisorData[i];
+      const supervisorRegions = row[3] ? row[3].toString().split(',').map(r => r.trim()) : [];
+      
+      if (supervisorRegions.includes(region)) {
+        regionSupervisors.push({
+          name: row[0],
+          uid: row[4]
+        });
+      }
+    }
+    
+    if (regionSupervisors.length === 0) {
+      Logger.log("分區 " + region + " 沒有主管，略過通知");
+      return;
+    }
+    
+    // 2. 從員工管理取得主管的 LINE ID
+    const staffSheet = ss.getSheetByName(SHEET_STAFF);
     const staffData = staffSheet.getDataRange().getValues();
     
-    // 找出該區所有主管
-    const supervisors = staffData.filter(row => {
-      const regions = row[6] ? row[6].toString().split(',') : [];
-      return row[5] === true && regions.includes(region); // 是主管 且 有該區權限
-    });
-    
-    // 發送 LINE 通知
-    supervisors.forEach(supervisor => {
-      const lineUserId = supervisor[4]; // LINE User ID 欄位
-      if (lineUserId) {
-        sendLinePushMessage(lineUserId, message);
+    regionSupervisors.forEach(supervisor => {
+      // 用 UID 找到該主管的完整資料
+      const staffRow = staffData.find(row => row[14] === supervisor.uid);
+      
+      if (staffRow) {
+        const lineId = staffRow[2]; // LINE_ID 在第 2 欄
+        if (lineId) {
+          sendLinePushMessage(lineId, message);
+          Logger.log("已發送 LINE 通知給：" + supervisor.name + " (UID: " + supervisor.uid + ")");
+        } else {
+          Logger.log("主管 " + supervisor.name + " 沒有設定 LINE ID");
+        }
       }
     });
+    
   } catch (e) {
     Logger.log("LINE 通知失敗：" + e.toString());
   }

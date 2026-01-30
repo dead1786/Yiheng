@@ -4,7 +4,7 @@ import {
   ShieldCheck, Search, Bell, Users, MapPin, Share, Activity, AlertTriangle, 
   Filter, Link, UserMinus, Lock, Unlock, Home, History, User, Settings,
   Download, FileSpreadsheet, Loader2, Unlink, Trash2, Plus, Edit2, X, Save,
-  Clock, MessageSquare, FileText, ChevronRight, AlertCircle, Menu, LogOut, LayoutDashboard, Calendar,Crown
+  Clock, MessageSquare, FileText, ChevronRight, AlertCircle, Menu, LogOut, LayoutDashboard, Calendar, Crown, CheckCircle
 } from 'lucide-react';
 
 interface Props {
@@ -25,7 +25,7 @@ const LoadingOverlay = ({text = "處理中..."}: {text?: string}) => (
 
 // 定義 Tab 類型
 type MainTab = 'admin' | 'history' | 'others';
-type SubTab = 'staff' | 'location' | 'shift' | 'export' | 'line' | 'log' | 'supervisor'; 
+type SubTab = 'staff' | 'location' | 'shift' | 'export' | 'line' | 'log' | 'supervisor' | 'approval';
 
 export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) => {
   const adminName = user.name; // 從 user 取得 name
@@ -57,6 +57,12 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
   const [supEdits, setSupEdits] = useState<{[key:string]: {dept: string, title: string, region: string}}>({});
   const [sheetList, setSheetList] = useState<{name:string, label:string}[]>([]);
 
+  // === 審批功能 State ===
+  const [pendingRequests, setPendingRequests] = useState<{ makeup: any[], leave: any[] }>({ makeup: [], leave: [] });
+  const [approvingRequest, setApprovingRequest] = useState<any>(null); // 目前正在審批的申請
+  const [approveReason, setApproveReason] = useState(''); // 核准/駁回原因
+  const [adjustedTime, setAdjustedTime] = useState(''); // 微調時間
+
   // Modals for Stats & History
   const [statModal, setStatModal] = useState<{title: string, list: any[]} | null>(null);
   
@@ -73,6 +79,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
 
   useEffect(() => {
     fetchAllData();
+    fetchPendingRequests(); // 初始載入待審申請
     api.adminGetSheetList().then(res => {
         if(res.success && res.list.length > 0) {
             setSheetList(res.list);
@@ -89,6 +96,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
   // 切換主頁籤時重置子頁籤
   useEffect(() => {
     if (mainTab === 'admin') setSubTab('staff');
+    if (mainTab === 'history') setSubTab('approval'); // 歷史 Tab 預設顯示審批
     if (mainTab === 'others') setSubTab('line');
   }, [mainTab]);
 
@@ -135,6 +143,58 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
      if (res.success) {
         setDailyRecords(res.list);
      }
+  };
+
+  // === 抓取待審申請清單 ===
+  const fetchPendingRequests = async () => {
+    if (!user.isSupervisor) return; // 非主管不執行
+    
+    try {
+      const res = await api.getPendingRequests(user.name, user.regions || []);
+      if (res.success) {
+        setPendingRequests(res.data);
+      }
+    } catch (e) {
+      console.error("抓取待審申請失敗:", e);
+    }
+  };
+
+  // === 開啟審批 Modal ===
+  const openApproveModal = (request: any, requestType: 'makeup' | 'leave') => {
+    setApprovingRequest({ ...request, requestType });
+    setApproveReason('');
+    setAdjustedTime(requestType === 'makeup' ? request.defaultTime : ''); // 預設時間
+  };
+
+  // === 提交審批 ===
+  const handleApprove = async (action: 'approve' | 'reject') => {
+    if (!approveReason.trim()) return onAlert("請填寫核准/駁回原因");
+    
+    setIsBlocking(true);
+    setBlockText(action === 'approve' ? "核准中..." : "駁回中...");
+    
+    try {
+      const res = await api.approveRequest({
+        requestId: approvingRequest.id,
+        type: approvingRequest.requestType,
+        action,
+        supervisorName: user.name,
+        approveReason,
+        adjustedTime: approvingRequest.requestType === 'makeup' ? adjustedTime : undefined
+      });
+      
+      if (res.success) {
+        onAlert(res.message || (action === 'approve' ? "✅ 已核准" : "❌ 已駁回"));
+        setApprovingRequest(null);
+        fetchPendingRequests(); // 重新載入清單
+      } else {
+        onAlert(res.message || "操作失敗");
+      }
+    } catch (e) {
+      onAlert("連線失敗，請稍後再試");
+    } finally {
+      setIsBlocking(false);
+    }
   };
 
   // [新增] 開啟員工歷史紀錄 (改收 UID)
@@ -1082,54 +1142,137 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                 </div>
             )}
 
-            {/* HISTORY */}
-            {mainTab === 'history' && (
-               <div className="flex flex-col gap-4">
-                   <div className="flex justify-between items-center mb-2 px-1">
-                       <h3 className="font-bold text-slate-300">近期打卡紀錄</h3>
-                   </div>
-                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                       {recordList.map((row: any[], i: number) => {
-                           const isSuccess = row[6]?.includes('成功');
-                           // [修改] 增加判斷「遠端」
-                           let method = '未知';
-                           const note = row[8] || '';
-                           if (note.includes('GPS') && note.includes('IP')) method = 'GPS+IP';
-                           else if (note.includes('GPS')) method = 'GPS';
-                           else if (note.includes('IP')) method = 'IP';
-                           else if (note.includes('遠端')) method = '遠端';
-                           
-                           return (
-                           <div key={i} className="bg-[#1e293b] p-4 rounded-2xl shadow-sm border border-slate-700 flex flex-col gap-2">
-                               <div className="flex justify-between items-start">
-                                  <div className="flex items-center gap-2">
-                                     <span className="font-bold text-slate-200 text-lg">{row[3]}</span>
-                                     <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${row[4] === '上班' ? 'bg-[#00bda4]/10 text-[#00bda4] border-[#00bda4]/20' : 'bg-[#FF9800]/10 text-[#FF9800] border-[#FF9800]/20'}`}>{row[4]}</span>
-                                  </div>
-                                  {/* 成功/失敗 狀態顯示 */}
-                                  <div className={`text-xs font-bold px-2 py-1 rounded flex items-center gap-1 ${isSuccess ? 'bg-slate-800 text-green-400' : 'bg-red-900/20 text-red-400'}`}>
-                                      {isSuccess ? (
-                                          <>{method} 打卡成功</>
-                                      ) : (
-                                          <>{row[6] || '失敗'}</> // 失敗原因
-                                      )}
-                                  </div>
-                               </div>
-                               
-                               <div className="flex justify-between items-end border-t border-slate-700/50 pt-2">
-                                  <p className="text-xs text-slate-400 font-mono">{row[1]} <span className="text-white font-bold text-sm ml-1">{row[2]}</span></p>
-                                  {/* 地點放大顯示 */}
-                                  <div className="flex items-center gap-1 max-w-[60%] justify-end">
-                                      <MapPin size={12} className="text-slate-500 shrink-0"/>
-                                      <p className="text-xs text-slate-300 font-bold truncate">{row[5]}</p>
-                                  </div>
-                               </div>
-                           </div>
-                       )})}
-                   </div>
-               </div>
-            )}
+      {/* 歷史 Tab */}
+      {mainTab === 'history' && (
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Sub Tabs */}
+                <div className="bg-[#0f172a] border-b border-slate-700 flex gap-2 px-4 py-2 overflow-x-auto">
+                  {user.isSupervisor && (
+                    <button onClick={() => setSubTab('approval')} className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all ${subTab === 'approval' ? 'bg-[#00bda4] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
+                      <Bell className="inline mr-2" size={16} /> 待審批
+                    </button>
+                  )}
+                  <button onClick={() => setSubTab('records')} className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all ${subTab === 'records' ? 'bg-[#00bda4] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
+                    <History className="inline mr-2" size={16} /> 打卡紀錄
+                  </button>
+                </div>
 
+                {/* 待審批內容 */}
+                {subTab === 'approval' && (
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {/* 補打卡申請區塊 */}
+                    <div className="bg-[#1e293b] rounded-2xl p-4 border border-slate-700">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <FileText className="text-blue-400" size={20} />
+                          <h3 className="font-bold text-white">補打卡申請</h3>
+                        </div>
+                        <span className="bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full text-xs font-bold">
+                          {pendingRequests.makeup.length} 筆待審
+                        </span>
+                      </div>
+
+                      {pendingRequests.makeup.length === 0 ? (
+                        <div className="text-center py-8 text-slate-500">
+                          <CheckCircle className="mx-auto mb-2 text-slate-600" size={32} />
+                          <p className="text-sm">目前無待審申請</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {pendingRequests.makeup.map((req) => (
+                            <div key={req.id} className="bg-[#334155] p-4 rounded-xl border border-slate-600 hover:border-blue-500/50 transition-all">
+                              <div className="flex justify-between items-start mb-2">
+                                <div>
+                                  <h4 className="font-bold text-white">{req.name}</h4>
+                                  <p className="text-xs text-slate-400">UID: {req.uid} | {req.region}</p>
+                                </div>
+                                <span className={`px-2 py-1 rounded-lg text-xs font-bold ${req.type === 'in' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'}`}>
+                                  {req.type === 'in' ? '上班' : '下班'}
+                                </span>
+                              </div>
+                              
+                              <div className="space-y-1 mb-3 text-sm">
+                                <p className="text-slate-300"><span className="text-slate-500">日期：</span>{req.date}</p>
+                                <p className="text-slate-300"><span className="text-slate-500">時間：</span>{req.defaultTime}</p>
+                                <p className="text-slate-300"><span className="text-slate-500">原因：</span>{req.reason}</p>
+                                <p className="text-xs text-slate-500">申請時間：{req.applyTime}</p>
+                              </div>
+                              
+                              <button 
+                                onClick={() => openApproveModal(req, 'makeup')}
+                                className="w-full bg-[#00bda4] hover:bg-[#00a892] text-white py-2 rounded-xl font-bold text-sm transition-colors"
+                              >
+                                審批
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 請假申請區塊（灰色禁用） */}
+                    <div className="bg-slate-700/30 rounded-2xl p-4 border border-slate-600 opacity-50">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="text-slate-500" size={20} />
+                          <h3 className="font-bold text-slate-400">請假申請</h3>
+                        </div>
+                        <span className="bg-slate-600 text-slate-400 px-3 py-1 rounded-full text-xs font-bold">
+                          功能開發中
+                        </span>
+                      </div>
+                      <div className="text-center py-8 text-slate-500">
+                        <p className="text-sm">此功能即將開放</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 打卡紀錄內容 */}
+                {subTab === 'records' && (
+                  <div className="flex-1 overflow-y-auto p-4">
+                    <div className="flex flex-col gap-4">
+                      <div className="flex justify-between items-center mb-2 px-1">
+                        <h3 className="font-bold text-slate-300">近期打卡紀錄</h3>
+                      </div>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        {recordList.map((row: any[], i: number) => {
+                          const isSuccess = row[6]?.includes('成功');
+                          let method = '未知';
+                          const note = row[8] || '';
+                          if (note.includes('GPS') && note.includes('IP')) method = 'GPS+IP';
+                          else if (note.includes('GPS')) method = 'GPS';
+                          else if (note.includes('IP')) method = 'IP';
+                          else if (note.includes('遠端')) method = '遠端';
+                          
+                          return (
+                            <div key={i} className="bg-[#1e293b] p-4 rounded-2xl shadow-sm border border-slate-700 flex flex-col gap-2">
+                              <div className="flex justify-between items-start">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-slate-200 text-lg">{row[3]}</span>
+                                  <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${row[4] === '上班' ? 'bg-[#00bda4]/10 text-[#00bda4] border-[#00bda4]/20' : 'bg-[#FF9800]/10 text-[#FF9800] border-[#FF9800]/20'}`}>{row[4]}</span>
+                                </div>
+                                <div className={`text-xs font-bold px-2 py-1 rounded flex items-center gap-1 ${isSuccess ? 'bg-slate-800 text-green-400' : 'bg-red-900/20 text-red-400'}`}>
+                                  {isSuccess ? <>{method} 打卡成功</> : <>{row[6] || '失敗'}</>}
+                                </div>
+                              </div>
+                              
+                              <div className="flex justify-between items-end border-t border-slate-700/50 pt-2">
+                                <p className="text-xs text-slate-400 font-mono">{row[1]} <span className="text-white font-bold text-sm ml-1">{row[2]}</span></p>
+                                <div className="flex items-center gap-1 max-w-[60%] justify-end">
+                                  <MapPin size={12} className="text-slate-500 shrink-0"/>
+                                  <p className="text-xs text-slate-300 font-bold truncate">{row[5]}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                </div>
+            )}
             {/* OTHERS - Line & Log */}
             {mainTab === 'others' && subTab === 'line' && (
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1377,6 +1520,105 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                      <div className="flex-1 flex items-center justify-center text-red-400">讀取失敗，請稍後再試</div>
                  )}
              </div>
+        </div>
+      )}
+
+     {/* === 審批 Modal === */}
+      {approvingRequest && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm animate-in fade-in" onClick={() => setApprovingRequest(null)}>
+          <div className="bg-[#1e293b] w-full max-w-md rounded-[2rem] shadow-2xl p-6 border border-slate-700" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="text-center mb-6">
+              <div className="bg-blue-500/20 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-blue-400">
+                <FileText size={28} />
+              </div>
+              <h3 className="font-bold text-xl text-white">審批申請</h3>
+              <p className="text-xs text-slate-500 mt-1">{approvingRequest.name} 的{approvingRequest.requestType === 'makeup' ? '補打卡' : '請假'}申請</p>
+            </div>
+
+            {/* 申請資訊 */}
+            <div className="bg-[#334155] rounded-xl p-4 mb-4 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-slate-400">姓名</span>
+                <span className="text-white font-bold">{approvingRequest.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">分區</span>
+                <span className="text-white font-bold">{approvingRequest.region}</span>
+              </div>
+              {approvingRequest.requestType === 'makeup' && (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">日期</span>
+                    <span className="text-white font-bold">{approvingRequest.date}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">類型</span>
+                    <span className={`font-bold ${approvingRequest.type === 'in' ? 'text-blue-400' : 'text-orange-400'}`}>
+                      {approvingRequest.type === 'in' ? '上班' : '下班'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">預設時間</span>
+                    <span className="text-white font-bold">{approvingRequest.defaultTime}</span>
+                  </div>
+                </>
+              )}
+              <div className="border-t border-slate-600 pt-2 mt-2">
+                <span className="text-slate-400 block mb-1">申請原因</span>
+                <p className="text-white font-bold">{approvingRequest.reason}</p>
+              </div>
+            </div>
+
+            {/* 微調時間（僅補打卡） */}
+            {approvingRequest.requestType === 'makeup' && (
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">微調打卡時間（選填）</label>
+                <input 
+                  type="time"
+                  value={adjustedTime}
+                  onChange={(e) => setAdjustedTime(e.target.value)}
+                  className="w-full p-3 bg-[#334155] border-none rounded-xl text-white font-bold focus:ring-2 focus:ring-blue-400 outline-none"
+                  placeholder={approvingRequest.defaultTime}
+                />
+                <p className="text-xs text-slate-500 mt-1">若不調整，將使用預設時間</p>
+              </div>
+            )}
+
+            {/* 核准/駁回原因 */}
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">核准/駁回原因 *</label>
+              <textarea 
+                value={approveReason}
+                onChange={(e) => setApproveReason(e.target.value)}
+                placeholder="請填寫原因..."
+                className="w-full p-3 bg-[#334155] border-none rounded-xl text-white placeholder:text-slate-500 focus:ring-2 focus:ring-blue-400 outline-none resize-none"
+                rows={3}
+              />
+            </div>
+
+            {/* 按鈕 */}
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setApprovingRequest(null)}
+                className="flex-1 py-3 bg-slate-700 text-slate-300 rounded-xl font-bold hover:bg-slate-600 transition-colors"
+              >
+                取消
+              </button>
+              <button 
+                onClick={() => handleApprove('reject')}
+                className="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-colors shadow-lg shadow-red-500/20"
+              >
+                駁回
+              </button>
+              <button 
+                onClick={() => handleApprove('approve')}
+                className="flex-1 py-3 bg-[#00bda4] text-white rounded-xl font-bold hover:bg-[#00a892] transition-colors shadow-lg shadow-[#00bda4]/20"
+              >
+                核准
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
