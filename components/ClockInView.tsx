@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
-import { useDarkMode } from '../App';
 import { 
   MapPin, LogOut, Navigation, CheckCircle, ShieldCheck, History, X, 
   Crown, KeyRound, Loader2, RefreshCw, Timer, Calculator,
   Building2, Bell, Wifi, Cloud, LogIn, Calendar, BarChart3, Settings, Lock, 
-  ToggleRight, ToggleLeft, ArrowRightFromLine, FileText, FilePlus, ChevronRight
+  ArrowRightFromLine, FileText, FilePlus
 } from 'lucide-react';
 
 const getDistanceInMeters = (lat1: number, lng1: number, lat2: number, lng2: number) => {
@@ -39,7 +38,6 @@ const LoadingOverlay = () => (
 );
 
 export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }: Props) => {
-  const { isDark, toggleDark } = useDarkMode();
   const [locations, setLocations] = useState<any[]>(() => { try { return JSON.parse(localStorage.getItem('cached_locations') || '[]'); } catch { return []; } });
   
   // [修改] 初始化地點：優先讀取個人上次的打卡地點 (last_station_用戶名)
@@ -130,8 +128,6 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
   const [monthlyStats, setMonthlyStats] = useState<any>(null);
   const [loadingStats, setLoadingStats] = useState(false);
 
-  // === 設定 Modal State ===
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   const exitIntentRef = useRef(false);
 
@@ -481,18 +477,18 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
   };
 
   return (
-    <div className="min-h-screen bg-[#f4f7f6] dark:bg-slate-900 flex flex-col font-sans relative pb-24">
+    <div className="min-h-screen bg-[#f4f7f6] flex flex-col font-sans relative pb-24">
       {isGlobalLoading && <LoadingOverlay />}
 
       {/* 1. Header Area */}
       <header className="px-6 py-6 flex items-center justify-between bg-transparent">
         <div className="flex items-center gap-3">
-          <div className="bg-[#dcfce7] dark:bg-slate-700 p-2.5 rounded-xl">
+          <div className="bg-[#dcfce7] p-2.5 rounded-xl">
              <Building2 className="text-[#0bc6a8]" size={24} />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">每日打卡工作台</h1>
+              <h1 className="text-xl font-bold text-slate-800 tracking-tight">每日打卡工作台</h1>
               {/* [修改] 管理員與主管入口 */}
               {(user.isAdmin || user.isSupervisor) && (
                 <button 
@@ -505,7 +501,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
               )}
             </div>
             <div className="flex flex-col">
-                <p className="text-sm font-bold text-slate-600 dark:text-slate-300 dark:text-slate-400">
+                <p className="text-sm font-bold text-slate-600">
                     {user.name} {user.region ? <span className="text-xs text-slate-400">({user.region})</span> : ''}
                 </p>
                 <p className="text-[10px] text-slate-400 font-mono">UID: {user.uid}</p>
@@ -516,7 +512,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
         {/* [修改] 右上角改為登出按鈕 */}
         <button 
           onClick={() => onConfirm("確定要登出系統嗎？", onLogout)}
-          className="p-2 bg-white dark:bg-slate-800 rounded-full shadow-sm text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+          className="p-2 bg-white rounded-full shadow-sm text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
           title="登出"
         >
           <LogOut size={20} />
@@ -528,7 +524,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
         {/* 2. Three Status Cards */}
         <div className="grid grid-cols-3 gap-4">
           {/* GPS Card */}
-          <div className="bg-white dark:bg-slate-800 dark:bg-slate-800 p-4 rounded-[1.5rem] shadow-sm flex flex-col items-center justify-center gap-2 min-h-[110px]">
+          <div className="bg-white p-4 rounded-[1.5rem] shadow-sm flex flex-col items-center justify-center gap-2 min-h-[110px]">
             <div className="bg-[#e0fbf6] p-2 rounded-full mb-1">
                <MapPin className="text-[#0bc6a8]" size={20} />
             </div>
@@ -539,18 +535,18 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
           </div>
           
           {/* IP Card */}
-          <div className="bg-white dark:bg-slate-800 p-4 rounded-[1.5rem] shadow-sm flex flex-col items-center justify-center gap-2 min-h-[110px]">
+          <div className="bg-white p-4 rounded-[1.5rem] shadow-sm flex flex-col items-center justify-center gap-2 min-h-[110px]">
             <div className="bg-[#e0fbf6] p-2 rounded-full mb-1">
                <Wifi className="text-[#0bc6a8]" size={20} />
             </div>
             <span className="text-xs font-bold text-slate-400">網路IP</span>
-            <span className="text-sm font-black text-slate-800 dark:text-slate-100 truncate w-full text-center" title={clientIp}>
+            <span className="text-sm font-black text-slate-800 truncate w-full text-center" title={clientIp}>
               {clientIp || '...'}
             </span>
           </div>
           
           {/* Remote Card */}
-          <div className="bg-white dark:bg-slate-800 p-4 rounded-[1.5rem] shadow-sm flex flex-col items-center justify-center gap-2 min-h-[110px]">
+          <div className="bg-white p-4 rounded-[1.5rem] shadow-sm flex flex-col items-center justify-center gap-2 min-h-[110px]">
             <div className="bg-[#e0fbf6] p-2 rounded-full mb-1">
                <Cloud className="text-[#0bc6a8]" size={20} />
             </div>
@@ -562,7 +558,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
         </div>
 
         {/* 3. Map Section */}
-        <div className="bg-white dark:bg-slate-800 p-3 rounded-[2rem] shadow-sm">
+        <div className="bg-white p-3 rounded-[2rem] shadow-sm">
           <div className="relative w-full aspect-[16/9] rounded-[1.5rem] overflow-hidden bg-slate-100">
              {/* Google Maps Iframe */}
              {coords ? (
@@ -599,7 +595,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
                    <select 
                       value={selectedLoc} 
                       onChange={e => setSelectedLoc(e.target.value)} 
-                      className="text-sm font-black text-slate-800 dark:text-slate-100 bg-transparent border-none outline-none p-0 cursor-pointer"
+                      className="text-sm font-black text-slate-800 bg-transparent border-none outline-none p-0 cursor-pointer"
                    >
                       {locations.map(loc => <option key={loc.name} value={loc.name}>{loc.name}</option>)}
                    </select>
@@ -614,7 +610,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
                  {/* GPS 狀態 */}
                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                     currentDist !== null && currentDist < (locations.find(l=>l.name===selectedLoc)?.radius || 500)
-                    ? 'bg-[#dcfce7] dark:bg-slate-700 text-[#0bc6a8]' 
+                    ? 'bg-[#dcfce7] text-[#0bc6a8]' 
                     : 'bg-red-50 text-red-500'
                  }`}>
                     {currentDist !== null && currentDist < (locations.find(l=>l.name===selectedLoc)?.radius || 500) ? 'GPS 範圍內' : 'GPS 範圍外'}
@@ -685,7 +681,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
       </main>
 
       {/* 6. Bottom Navigation (White, Fixed) */}
-      <nav className="fixed bottom-0 w-full bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700 pb-6 pt-2 px-6 flex justify-between items-center z-40 text-slate-400 dark:text-slate-500">
+      <nav className="fixed bottom-0 w-full bg-white border-t border-slate-100 pb-6 pt-2 px-6 flex justify-between items-center z-40 text-slate-400">
          
          <button onClick={() => fetchHistory(true)} className="flex flex-col items-center gap-1 hover:text-[#0bc6a8] transition-colors">
             <History size={22} strokeWidth={2.5} />
@@ -709,7 +705,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
             <span className="text-[10px] font-bold">申請</span>
          </button>
 
-        <button onClick={() => setShowSettingsModal(true)} className="flex flex-col items-center gap-1 hover:text-[#0bc6a8] transition-colors">
+       <button onClick={() => setShowChangePwd(true)} className="flex flex-col items-center gap-1 hover:text-[#0bc6a8] transition-colors">
             <Settings size={22} strokeWidth={2.5} />
             <span className="text-[10px] font-bold">設定</span>
          </button>
@@ -718,18 +714,18 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
       {/* Modal 部分保持原本功能 */}
       {showHistory && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in" onClick={() => setShowHistory(false)}>
-          <div className="bg-white dark:bg-slate-800 rounded-[2rem] w-full max-w-md h-[70vh] flex flex-col shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="p-5 border-b flex justify-between items-center bg-slate-50 dark:bg-slate-700">
-                <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100">打卡紀錄</h3>
-                <button onClick={() => setShowHistory(false)} className="bg-slate-200 dark:bg-slate-700 p-2 rounded-full hover:bg-slate-300"><X size={16}/></button>
+          <div className="bg-white rounded-[2rem] w-full max-w-md h-[70vh] flex flex-col shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-5 border-b flex justify-between items-center bg-slate-50">
+                <h3 className="font-bold text-lg text-slate-800">打卡紀錄</h3>
+                <button onClick={() => setShowHistory(false)} className="bg-slate-200 p-2 rounded-full hover:bg-slate-300"><X size={16}/></button>
             </div>
             <div className="flex p-3 gap-2 bg-white">
-              <button onClick={() => setHistoryTab('current')} className={`flex-1 py-2 rounded-xl text-sm font-bold transition ${historyTab === 'current' ? 'bg-[#0bc6a8] text-white shadow-md' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}`}>本月</button>
-              <button onClick={() => setHistoryTab('last')} className={`flex-1 py-2 rounded-xl text-sm font-bold transition ${historyTab === 'last' ? 'bg-[#0bc6a8] text-white shadow-md' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}`}>上月</button>
+              <button onClick={() => setHistoryTab('current')} className={`flex-1 py-2 rounded-xl text-sm font-bold transition ${historyTab === 'current' ? 'bg-[#0bc6a8] text-white shadow-md' : 'bg-slate-100 text-slate-500'}`}>本月</button>
+              <button onClick={() => setHistoryTab('last')} className={`flex-1 py-2 rounded-xl text-sm font-bold transition ${historyTab === 'last' ? 'bg-[#0bc6a8] text-white shadow-md' : 'bg-slate-100 text-slate-500'}`}>上月</button>
             </div>
             <div className="flex-1 overflow-auto p-4">
                 <table className="w-full text-sm text-left">
-                    <thead className="text-xs text-slate-400 uppercase bg-white dark:bg-slate-800 sticky top-0">
+                    <thead className="text-xs text-slate-400 uppercase bg-white sticky top-0">
                         <tr>
                             <th className="px-2 py-3">日期</th>
                             <th className="px-2 py-3">上班</th>
@@ -748,18 +744,18 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
 
       {showChangePwd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in" onClick={() => setShowChangePwd(false)}>
-          <div className="bg-white dark:bg-slate-800 rounded-[2rem] w-full max-w-xs shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-[2rem] w-full max-w-xs shadow-2xl p-6" onClick={e => e.stopPropagation()}>
             <div className="text-center mb-6">
               <div className="bg-blue-50 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-blue-500"><KeyRound size={28} /></div>
-              <h3 className="font-black text-xl text-slate-800 dark:text-slate-100">修改密碼</h3>
+              <h3 className="font-black text-xl text-slate-800">修改密碼</h3>
             </div>
             <div className="space-y-4">
-              <div><input type="password" value={pwdForm.old} onChange={e=>setPwdForm({...pwdForm, old: e.target.value})} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border-none rounded-xl text-slate-800 dark:text-slate-100 font-bold placeholder:font-normal placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200 outline-none" placeholder="目前密碼" /></div>
-              <div><input type="password" value={pwdForm.new1} onChange={e=>setPwdForm({...pwdForm, new1: e.target.value})} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border-none rounded-xl text-slate-800 dark:text-slate-100 font-bold placeholder:font-normal placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200 outline-none" placeholder="新密碼 (至少4位)" /></div>
-              <div><input type="password" value={pwdForm.new2} onChange={e=>setPwdForm({...pwdForm, new2: e.target.value})} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border-none rounded-xl text-slate-800 dark:text-slate-100 font-bold placeholder:font-normal placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200 outline-none" placeholder="確認新密碼" /></div>
+              <div><input type="password" value={pwdForm.old} onChange={e=>setPwdForm({...pwdForm, old: e.target.value})} className="w-full p-3 bg-slate-50 border-none rounded-xl text-slate-800 font-bold placeholder:font-normal placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200 outline-none" placeholder="目前密碼" /></div>
+              <div><input type="password" value={pwdForm.new1} onChange={e=>setPwdForm({...pwdForm, new1: e.target.value})} className="w-full p-3 bg-slate-50 border-none rounded-xl text-slate-800 font-bold placeholder:font-normal placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200 outline-none" placeholder="新密碼 (至少4位)" /></div>
+              <div><input type="password" value={pwdForm.new2} onChange={e=>setPwdForm({...pwdForm, new2: e.target.value})} className="w-full p-3 bg-slate-50 border-none rounded-xl text-slate-800 font-bold placeholder:font-normal placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200 outline-none" placeholder="確認新密碼" /></div>
             </div>
             <div className="flex gap-3 mt-8">
-              <button onClick={() => setShowChangePwd(false)} className="flex-1 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-xl font-bold hover:bg-slate-200">取消</button>
+              <button onClick={() => setShowChangePwd(false)} className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-xl font-bold hover:bg-slate-200">取消</button>
               <button onClick={handleChangePassword} className="flex-1 py-3 bg-[#0bc6a8] text-white rounded-xl font-bold hover:bg-[#09b095] shadow-lg shadow-teal-200">確認修改</button>
             </div>
           </div>
@@ -769,12 +765,12 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
       {/* === 申請選單彈窗 === */}
       {showRequestMenu && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in" onClick={() => setShowRequestMenu(false)}>
-          <div className="bg-white dark:bg-slate-800 rounded-[2rem] w-full max-w-xs shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-[2rem] w-full max-w-xs shadow-2xl p-6" onClick={e => e.stopPropagation()}>
             <div className="text-center mb-6">
-              <div className="bg-slate-50 dark:bg-slate-700 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-[#0bc6a8]">
+              <div className="bg-slate-50 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-[#0bc6a8]">
                 <FileText size={28} />
               </div>
-              <h3 className="font-black text-xl text-slate-800 dark:text-slate-100">選擇申請類型</h3>
+              <h3 className="font-black text-xl text-slate-800">選擇申請類型</h3>
             </div>
             
             <div className="space-y-3">
@@ -788,7 +784,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
               
               <button 
                 disabled
-                className="w-full bg-slate-200 dark:bg-slate-700 text-slate-400 py-4 rounded-xl font-bold text-base cursor-not-allowed flex items-center justify-center gap-2 opacity-50"
+                className="w-full bg-slate-200 text-slate-400 py-4 rounded-xl font-bold text-base cursor-not-allowed flex items-center justify-center gap-2 opacity-50"
               >
                 <Calendar size={20} />
                 請假申請（尚未開放）
@@ -797,7 +793,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
             
             <button 
               onClick={() => setShowRequestMenu(false)}
-              className="w-full mt-4 py-3 text-slate-500 dark:text-slate-300 font-bold hover:text-slate-700 dark:text-slate-200 transition-colors"
+              className="w-full mt-4 py-3 text-slate-500 font-bold hover:text-slate-700 transition-colors"
             >
               取消
             </button>
@@ -808,39 +804,39 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
       {/* === 補打卡申請表單 === */}
       {showMakeupForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in overflow-y-auto" onClick={() => setShowMakeupForm(false)}>
-          <div className="bg-white dark:bg-slate-800 rounded-[2rem] w-full max-w-sm shadow-2xl p-6 my-8" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-[2rem] w-full max-w-sm shadow-2xl p-6 my-8" onClick={e => e.stopPropagation()}>
             <div className="text-center mb-6">
               <div className="bg-blue-50 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-blue-500">
                 <FilePlus size={28} />
               </div>
-              <h3 className="font-black text-xl text-slate-800 dark:text-slate-100">補打卡申請</h3>
+              <h3 className="font-black text-xl text-slate-800">補打卡申請</h3>
             </div>
             
             <div className="space-y-4">
               {/* 日期選擇 */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">補打卡日期</label>
+                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">補打卡日期</label>
                 <input 
                   type="date"
                   value={makeupDate}
                   onChange={(e) => setMakeupDate(e.target.value)}
-                  className="w-full p-3 bg-slate-50 dark:bg-slate-700 border-none rounded-xl text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-blue-200 outline-none"
+                  className="w-full p-3 bg-slate-50 border-none rounded-xl text-slate-800 font-bold focus:ring-2 focus:ring-blue-200 outline-none"
                 />
               </div>
               
               {/* 類型選擇 */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">類型</label>
+                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">類型</label>
                 <div className="grid grid-cols-2 gap-3">
                   <button 
                     onClick={() => setMakeupType('in')}
-                    className={`py-3 rounded-xl font-bold transition-all ${makeupType === 'in' ? 'bg-[#0bc6a8] text-white shadow-md' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}`}
+                    className={`py-3 rounded-xl font-bold transition-all ${makeupType === 'in' ? 'bg-[#0bc6a8] text-white shadow-md' : 'bg-slate-100 text-slate-500'}`}
                   >
                     上班
                   </button>
                   <button 
                     onClick={() => setMakeupType('out')}
-                    className={`py-3 rounded-xl font-bold transition-all ${makeupType === 'out' ? 'bg-[#ff9f28] text-white shadow-md' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}`}
+                    className={`py-3 rounded-xl font-bold transition-all ${makeupType === 'out' ? 'bg-[#ff9f28] text-white shadow-md' : 'bg-slate-100 text-slate-500'}`}
                   >
                     下班
                   </button>
@@ -849,12 +845,12 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
               
               {/* 原因 */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">申請原因</label>
+                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">申請原因</label>
                 <textarea 
                   value={makeupReason}
                   onChange={(e) => setMakeupReason(e.target.value)}
                   placeholder="請簡述補打卡原因..."
-                  className="w-full p-3 bg-slate-50 dark:bg-slate-700 border-none rounded-xl text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200 outline-none resize-none"
+                  className="w-full p-3 bg-slate-50 border-none rounded-xl text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200 outline-none resize-none"
                   rows={4}
                 />
               </div>
@@ -863,7 +859,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
             <div className="flex gap-3 mt-6">
               <button 
                 onClick={() => { setShowMakeupForm(false); setMakeupDate(''); setMakeupReason(''); }}
-                className="flex-1 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-xl font-bold hover:bg-slate-200 dark:bg-slate-700 transition-colors"
+                className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-xl font-bold hover:bg-slate-200 transition-colors"
               >
                 取消
               </button>
@@ -882,54 +878,54 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
       {/* === 請假申請表單（預留） === */}
       {showLeaveForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in overflow-y-auto" onClick={() => setShowLeaveForm(false)}>
-          <div className="bg-white dark:bg-slate-800 rounded-[2rem] w-full max-w-sm shadow-2xl p-6 my-8" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-[2rem] w-full max-w-sm shadow-2xl p-6 my-8" onClick={e => e.stopPropagation()}>
             <div className="text-center mb-6">
               <div className="bg-purple-50 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-purple-500">
                 <Calendar size={28} />
               </div>
-              <h3 className="font-black text-xl text-slate-800 dark:text-slate-100">請假申請</h3>
+              <h3 className="font-black text-xl text-slate-800">請假申請</h3>
             </div>
             
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">起始日期</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">起始日期</label>
                   <input 
                     type="date"
                     value={leaveDateStart}
                     onChange={(e) => setLeaveDateStart(e.target.value)}
-                    className="w-full p-3 bg-slate-50 dark:bg-slate-700 border-none rounded-xl text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-purple-200 outline-none"
+                    className="w-full p-3 bg-slate-50 border-none rounded-xl text-slate-800 font-bold focus:ring-2 focus:ring-purple-200 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">結束日期</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">結束日期</label>
                   <input 
                     type="date"
                     value={leaveDateEnd}
                     onChange={(e) => setLeaveDateEnd(e.target.value)}
-                    className="w-full p-3 bg-slate-50 dark:bg-slate-700 border-none rounded-xl text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-purple-200 outline-none"
+                    className="w-full p-3 bg-slate-50 border-none rounded-xl text-slate-800 font-bold focus:ring-2 focus:ring-purple-200 outline-none"
                   />
                 </div>
               </div>
               
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">請假天數</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">請假天數</label>
                   <input 
                     type="number"
                     min="0.5"
                     step="0.5"
                     value={leaveDays}
                     onChange={(e) => setLeaveDays(parseFloat(e.target.value))}
-                    className="w-full p-3 bg-slate-50 dark:bg-slate-700 border-none rounded-xl text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-purple-200 outline-none"
+                    className="w-full p-3 bg-slate-50 border-none rounded-xl text-slate-800 font-bold focus:ring-2 focus:ring-purple-200 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">類型</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">類型</label>
                   <select 
                     value={leaveHalfDay ? 'half' : 'full'}
                     onChange={(e) => setLeaveHalfDay(e.target.value === 'half')}
-                    className="w-full p-3 bg-slate-50 dark:bg-slate-700 border-none rounded-xl text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-purple-200 outline-none"
+                    className="w-full p-3 bg-slate-50 border-none rounded-xl text-slate-800 font-bold focus:ring-2 focus:ring-purple-200 outline-none"
                   >
                     <option value="full">整天</option>
                     <option value="half">半天</option>
@@ -938,11 +934,11 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
               </div>
               
               <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">假別</label>
+                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">假別</label>
                 <select 
                   value={leaveType}
                   onChange={(e) => setLeaveType(e.target.value)}
-                  className="w-full p-3 bg-slate-50 dark:bg-slate-700 border-none rounded-xl text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-purple-200 outline-none"
+                  className="w-full p-3 bg-slate-50 border-none rounded-xl text-slate-800 font-bold focus:ring-2 focus:ring-purple-200 outline-none"
                 >
                   <option>事假</option>
                   <option>病假</option>
@@ -955,12 +951,12 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
               </div>
               
               <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">請假原因</label>
+                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">請假原因</label>
                 <textarea 
                   value={leaveReason}
                   onChange={(e) => setLeaveReason(e.target.value)}
                   placeholder="請簡述請假原因..."
-                  className="w-full p-3 bg-slate-50 dark:bg-slate-700 border-none rounded-xl text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:ring-2 focus:ring-purple-200 outline-none resize-none"
+                  className="w-full p-3 bg-slate-50 border-none rounded-xl text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-purple-200 outline-none resize-none"
                   rows={4}
                 />
               </div>
@@ -969,7 +965,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
             <div className="flex gap-3 mt-6">
               <button 
                 onClick={() => { setShowLeaveForm(false); }}
-                className="flex-1 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-xl font-bold hover:bg-slate-200 dark:bg-slate-700 transition-colors"
+                className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-xl font-bold hover:bg-slate-200 transition-colors"
               >
                 取消
               </button>
@@ -988,52 +984,52 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
       {/* === 統計 Modal === */}
       {showStatsModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in" onClick={() => setShowStatsModal(false)}>
-          <div className="bg-white dark:bg-slate-800 rounded-[2rem] w-full max-w-sm shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-[2rem] w-full max-w-sm shadow-2xl p-6" onClick={e => e.stopPropagation()}>
             <div className="text-center mb-6">
               <div className="bg-[#0bc6a8]/10 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-[#0bc6a8]">
                 <BarChart3 size={28} />
               </div>
-              <h3 className="font-black text-xl text-slate-800 dark:text-slate-100">當月統計</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{user.name} 的出勤統計</p>
+              <h3 className="font-black text-xl text-slate-800">當月統計</h3>
+              <p className="text-xs text-slate-500 mt-1">{user.name} 的出勤統計</p>
             </div>
 
             {loadingStats ? (
               <div className="flex flex-col items-center justify-center py-8">
                 <Loader2 className="animate-spin text-[#0bc6a8] mb-2" size={32} />
-                <p className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-400">載入中...</p>
+                <p className="text-sm text-slate-500">載入中...</p>
               </div>
             ) : monthlyStats ? (
               <div className="space-y-4">
                 {/* 統計月份 */}
-                <div className="bg-slate-50 dark:bg-slate-700 rounded-xl p-4">
-                  <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">統計月份</div>
-                  <div className="text-2xl font-black text-slate-800 dark:text-slate-100">{monthlyStats.month}</div>
+                <div className="bg-slate-50 rounded-xl p-4">
+                  <div className="text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">統計月份</div>
+                  <div className="text-2xl font-black text-slate-800">{monthlyStats.month}</div>
                 </div>
 
                 {/* 統計數據 */}
                 <div className="space-y-3">
                   {/* 總工時 */}
-                  <div className="bg-slate-50 dark:bg-slate-700 rounded-xl p-4 flex items-center justify-between">
+                  <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between">
                     <div>
-                      <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">總工時</div>
+                      <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">總工時</div>
                       <div className="text-sm text-slate-400 mt-0.5">本月累計</div>
                     </div>
                     <div className="text-3xl font-black text-[#0bc6a8]">{monthlyStats.totalHours}<span className="text-base text-slate-400 ml-1">H</span></div>
                   </div>
 
                   {/* 遲到次數 */}
-                  <div className="bg-slate-50 dark:bg-slate-700 rounded-xl p-4 flex items-center justify-between">
+                  <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between">
                     <div>
-                      <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">遲到次數</div>
+                      <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">遲到次數</div>
                       <div className="text-sm text-slate-400 mt-0.5">本月累計</div>
                     </div>
                     <div className="text-3xl font-black text-[#ff9f28]">{monthlyStats.lateCount}<span className="text-base text-slate-400 ml-1">次</span></div>
                   </div>
 
                   {/* 早退次數 */}
-                  <div className="bg-slate-50 dark:bg-slate-700 rounded-xl p-4 flex items-center justify-between">
+                  <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between">
                     <div>
-                      <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">早退次數</div>
+                      <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">早退次數</div>
                       <div className="text-sm text-slate-400 mt-0.5">本月累計</div>
                     </div>
                     <div className="text-3xl font-black text-red-500">{monthlyStats.earlyCount}<span className="text-base text-slate-400 ml-1">次</span></div>
@@ -1041,7 +1037,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
                 </div>
               </div>
             ) : (
-              <div className="text-center py-8 text-slate-500 dark:text-slate-400 dark:text-slate-400">
+              <div className="text-center py-8 text-slate-500">
                 <p className="text-sm">無統計資料</p>
               </div>
             )}
@@ -1056,70 +1052,6 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
         </div>
       )}
 
-      {/* === 設定 Modal === */}
-      {showSettingsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in" onClick={() => setShowSettingsModal(false)}>
-          <div className="bg-white dark:bg-slate-800 rounded-[2rem] w-full max-w-sm shadow-2xl p-6" onClick={e => e.stopPropagation()}>
-            <div className="text-center mb-6">
-              <div className="bg-slate-100 dark:bg-slate-700 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-slate-600 dark:text-slate-300">
-                <Settings size={28} />
-              </div>
-              <h3 className="font-black text-xl text-slate-800 dark:text-slate-100">設定</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">個人化設定</p>
-            </div>
-
-            <div className="space-y-3">
-              {/* 深色模式切換 */}
-              <button
-                onClick={toggleDark}
-                className="w-full bg-slate-50 dark:bg-slate-700 rounded-xl p-4 flex items-center justify-between hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  {isDark ? (
-                    <ToggleRight className="text-[#0bc6a8]" size={24} strokeWidth={2.5} />
-                  ) : (
-                    <ToggleLeft className="text-slate-400" size={24} strokeWidth={2.5} />
-                  )}
-                  <div className="text-left">
-                    <div className="font-bold text-slate-800 dark:text-slate-100">深色模式</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400">
-                      {isDark ? '已開啟' : '已關閉'}
-                    </div>
-                  </div>
-                </div>
-                <div className={`px-3 py-1 rounded-full text-xs font-bold ${isDark ? 'bg-[#0bc6a8] text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
-                  {isDark ? 'ON' : 'OFF'}
-                </div>
-              </button>
-
-              {/* 修改密碼 */}
-              <button
-                onClick={() => {
-                  setShowSettingsModal(false);
-                  setShowChangePwd(true);
-                }}
-                className="w-full bg-slate-50 dark:bg-slate-700 rounded-xl p-4 flex items-center justify-between hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <KeyRound className="text-slate-400 dark:text-slate-500" size={24} strokeWidth={2.5} />
-                  <div className="text-left">
-                    <div className="font-bold text-slate-800 dark:text-slate-100">修改密碼</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400">變更登入密碼</div>
-                  </div>
-                </div>
-                <ArrowRightFromLine className="text-slate-400" size={20} />
-              </button>
-            </div>
-
-            <button 
-              onClick={() => setShowSettingsModal(false)}
-              className="w-full mt-6 py-3 bg-slate-200 dark:bg-slate-700 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
-            >
-              關閉
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

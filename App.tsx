@@ -6,16 +6,7 @@ import { AdminDashboardView } from './components/AdminDashboardView';
 import { Loader2, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { api } from './services/api';
 
-// === 深色模式 Context ===
-const DarkModeContext = createContext<{
-  isDark: boolean;
-  toggleDark: () => void;
-}>({
-  isDark: false,
-  toggleDark: () => {},
-});
 
-export const useDarkMode = () => useContext(DarkModeContext);
 
 // === 深色模式預覽組件 ===
 const DarkModePreview = ({ onExit }: { onExit: () => void }) => {
@@ -238,22 +229,7 @@ interface User {
 const SESSION_DURATION = 21 * 24 * 60 * 60 * 1000;
 
 const App: React.FC = () => {
-  // [新增] 深色模式狀態
-  const [isDark, setIsDark] = useState(() => {
-    try {
-      return localStorage.getItem('dark_mode') === 'true';
-    } catch {
-      return false;
-    }
-  });
-
-  const toggleDark = () => {
-    setIsDark(prev => {
-      const newValue = !prev;
-      localStorage.setItem('dark_mode', String(newValue));
-      return newValue;
-    });
-  };
+  
 
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -431,29 +407,19 @@ const App: React.FC = () => {
     return <ClockInView user={user} onLogout={handleLogout} onAlert={showAlert} onConfirm={showConfirm} onEnterAdmin={() => setShowAdmin(true)} />;
   };
 
-  // [新增] 監聽 isDark 變化，動態更新 <html> 的 class
-  useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [isDark]);
 
   // [關鍵] ModalDialog 放在最外層，永遠不會被 Unmount
   return (
-    <DarkModeContext.Provider value={{ isDark, toggleDark }}>
-      <>
-        {renderContent()}
-        <ModalDialog 
-          isOpen={modalConfig.isOpen} 
-          type={modalConfig.type} 
-          message={modalConfig.message} 
-          onConfirm={modalConfig.onConfirm} 
-          onCancel={modalConfig.onCancel} 
-        />
-      </>
-    </DarkModeContext.Provider>
+    <>
+      {renderContent()}
+      <ModalDialog 
+        isOpen={modalConfig.isOpen} 
+        type={modalConfig.type} 
+        message={modalConfig.message} 
+        onConfirm={modalConfig.onConfirm} 
+        onCancel={modalConfig.onCancel} 
+      />
+    </>
   );
 };
 

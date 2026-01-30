@@ -158,14 +158,28 @@ export const LoginView = ({ onLogin }: Props) => {
     });
   };
 
-  // [新增] 驗證管理員密碼
+  // [新增] 驗證管理員密碼 - 直接登入為小凱
   const handleAdminAuth = async () => {
     if (adminUsername === '小凱' && adminPassword === 'abc123') {
       setShowAdminAuth(false);
       setAdminAuthError('');
       setAdminUsername('');
       setAdminPassword('');
-      handleOpenAdminLogin();
+      
+      // 直接登入為小凱，不顯示員工選擇器
+      const loginTime = Date.now();
+      onLogin({
+        name: '小凱',
+        uid: 'u_admin_xiaokai', // 你的實際 UID
+        region: '總公司', // 你的實際分區
+        loginTime,
+        needReset: false,
+        allowRemote: true,
+        isAdmin: true,
+        isSupervisor: false,
+        regions: [],
+        shift: '測試組'
+      });
     } else {
       setAdminAuthError('帳號或密碼錯誤');
     }
