@@ -685,7 +685,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
       </main>
 
       {/* 6. Bottom Navigation (White, Fixed) */}
-      <nav className="fixed bottom-0 w-full bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700 dark:border-slate-700 pb-6 pt-2 px-6 flex justify-between items-center z-40 text-slate-400">
+      <nav className="fixed bottom-0 w-full bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700 pb-6 pt-2 px-6 flex justify-between items-center z-40 text-slate-400 dark:text-slate-500">
          
          <button onClick={() => fetchHistory(true)} className="flex flex-col items-center gap-1 hover:text-[#0bc6a8] transition-colors">
             <History size={22} strokeWidth={2.5} />
