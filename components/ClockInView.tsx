@@ -255,6 +255,15 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
       return new Date(ts).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
   };
   
+  const formatDateTime = (ts: number) => {
+      if (!ts) return "";
+      const date = new Date(ts);
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      const time = date.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
+      return `${month}/${day} ${time}`;
+  };
+  
   // [新增] 判斷是否為 20 小時內的紀錄
   const isRecentIn = (Date.now() - lockState.in) < 20 * 60 * 60 * 1000;
   const isRecentOut = (Date.now() - lockState.out) < 20 * 60 * 60 * 1000;
@@ -549,7 +558,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
 
         {/* 3. Map Section */}
         <div className="bg-white p-3 rounded-[2rem] shadow-sm">
-          <div className="relative w-full aspect-[4/3] rounded-[1.5rem] overflow-hidden bg-slate-100">
+          <div className="relative w-full aspect-[16/9] rounded-[1.5rem] overflow-hidden bg-slate-100">
              {/* Google Maps Iframe */}
              {coords ? (
                 <iframe 
@@ -637,7 +646,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
             >
                <div className="flex flex-col items-start gap-1">
                   <span className="text-2xl font-black tracking-wide">
-                     {isRecentIn ? `已打卡 ${formatTime(lockState.in)}` : "上班打卡"}
+                     {isRecentIn ? `已打卡 ${formatDateTime(lockState.in)}` : "上班打卡"}
                   </span>
                   <span className="text-xs font-medium opacity-80 tracking-widest">
                      {isRecentIn ? "點擊可重複打卡" : "CLOCK IN"}
@@ -656,7 +665,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
             >
                <div className="flex flex-col items-start gap-1">
                   <span className="text-2xl font-black tracking-wide">
-                     {isRecentOut ? `已打卡 ${formatTime(lockState.out)}` : "下班打卡"}
+                     {isRecentOut ? `已打卡 ${formatDateTime(lockState.out)}` : "下班打卡"}
                   </span>
                   <span className="text-xs font-medium opacity-80 tracking-widest">
                      {isRecentOut ? "點擊可重複打卡" : "CLOCK OUT"}
@@ -976,7 +985,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in" onClick={() => setShowStatsModal(false)}>
           <div className="bg-white rounded-[2rem] w-full max-w-sm shadow-2xl p-6" onClick={e => e.stopPropagation()}>
             <div className="text-center mb-6">
-              <div className="bg-gradient-to-br from-blue-500 to-purple-600 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-white shadow-lg">
+              <div className="bg-[#0bc6a8]/10 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-[#0bc6a8]">
                 <BarChart3 size={28} />
               </div>
               <h3 className="font-black text-xl text-slate-800">當月統計</h3>
@@ -985,38 +994,44 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
 
             {loadingStats ? (
               <div className="flex flex-col items-center justify-center py-8">
-                <Loader2 className="animate-spin text-blue-500 mb-2" size={32} />
+                <Loader2 className="animate-spin text-[#0bc6a8] mb-2" size={32} />
                 <p className="text-sm text-slate-500">載入中...</p>
               </div>
             ) : monthlyStats ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {/* 統計月份 */}
-                <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 border border-blue-100">
-                  <div className="text-xs text-slate-500 mb-1">統計月份</div>
+                <div className="bg-slate-50 rounded-xl p-4">
+                  <div className="text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">統計月份</div>
                   <div className="text-2xl font-black text-slate-800">{monthlyStats.month}</div>
                 </div>
 
                 {/* 統計數據 */}
-                <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-3">
                   {/* 總工時 */}
-                  <div className="bg-green-50 rounded-xl p-4 text-center border border-green-100">
-                    <div className="text-xs text-green-600 mb-1 font-bold">總工時</div>
-                    <div className="text-2xl font-black text-green-700">{monthlyStats.totalHours}</div>
-                    <div className="text-[10px] text-green-600 mt-1">小時</div>
+                  <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">總工時</div>
+                      <div className="text-sm text-slate-400 mt-0.5">本月累計</div>
+                    </div>
+                    <div className="text-3xl font-black text-[#0bc6a8]">{monthlyStats.totalHours}<span className="text-base text-slate-400 ml-1">H</span></div>
                   </div>
 
                   {/* 遲到次數 */}
-                  <div className="bg-orange-50 rounded-xl p-4 text-center border border-orange-100">
-                    <div className="text-xs text-orange-600 mb-1 font-bold">遲到</div>
-                    <div className="text-2xl font-black text-orange-700">{monthlyStats.lateCount}</div>
-                    <div className="text-[10px] text-orange-600 mt-1">次</div>
+                  <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">遲到次數</div>
+                      <div className="text-sm text-slate-400 mt-0.5">本月累計</div>
+                    </div>
+                    <div className="text-3xl font-black text-[#ff9f28]">{monthlyStats.lateCount}<span className="text-base text-slate-400 ml-1">次</span></div>
                   </div>
 
                   {/* 早退次數 */}
-                  <div className="bg-red-50 rounded-xl p-4 text-center border border-red-100">
-                    <div className="text-xs text-red-600 mb-1 font-bold">早退</div>
-                    <div className="text-2xl font-black text-red-700">{monthlyStats.earlyCount}</div>
-                    <div className="text-[10px] text-red-600 mt-1">次</div>
+                  <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">早退次數</div>
+                      <div className="text-sm text-slate-400 mt-0.5">本月累計</div>
+                    </div>
+                    <div className="text-3xl font-black text-red-500">{monthlyStats.earlyCount}<span className="text-base text-slate-400 ml-1">次</span></div>
                   </div>
                 </div>
               </div>
@@ -1028,7 +1043,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
 
             <button 
               onClick={() => setShowStatsModal(false)}
-              className="w-full mt-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl font-bold hover:from-blue-600 hover:to-purple-700 shadow-lg shadow-blue-200 transition-all"
+              className="w-full mt-6 py-3 bg-[#0bc6a8] text-white rounded-xl font-bold hover:bg-[#09b095] shadow-lg shadow-teal-200 transition-all"
             >
               關閉
             </button>
