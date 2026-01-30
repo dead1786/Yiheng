@@ -65,6 +65,6 @@ export const api = {
   getPendingRequests: (supervisorName: string, regions: string[]) => 
     post("getPendingRequests", { supervisorName, regions }),
   
-  approveRequest: (data: { requestId: string, type: 'makeup' | 'leave', action: 'approve' | 'reject', supervisorName: string, approveReason: string, adjustedTime?: string }) => 
+  approveRequest: (data: { requestId: string, type: 'makeup' | 'leave', approveAction: 'approve' | 'reject', supervisorName: string, approveReason: string, adjustedTime?: string }) => 
     post("approveRequest", data),
 };

@@ -174,11 +174,10 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
     setBlockText(action === 'approve' ? "核准中..." : "駁回中...");
     
     try {
-      // [Debug] 顯示發送的資料
       const requestData = {
         requestId: approvingRequest.id,
         type: approvingRequest.requestType,
-        action,
+        approveAction: action,  // [修正] 改名避免衝突
         supervisorName: user.name,
         approveReason,
         adjustedTime: approvingRequest.requestType === 'makeup' ? adjustedTime : undefined
