@@ -1,10 +1,167 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, createContext, useContext } from 'react';
 import { LoginView } from './components/LoginView';
 import { ChangePasswordView } from './components/ChangePasswordView';
 import { ClockInView } from './components/ClockInView';
 import { AdminDashboardView } from './components/AdminDashboardView';
 import { Loader2, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { api } from './services/api';
+
+// === 深色模式 Context ===
+const DarkModeContext = createContext<{
+  isDark: boolean;
+  toggleDark: () => void;
+}>({
+  isDark: false,
+  toggleDark: () => {},
+});
+
+export const useDarkMode = () => useContext(DarkModeContext);
+
+// === 深色模式預覽組件 ===
+const DarkModePreview = ({ onExit }: { onExit: () => void }) => {
+  return (
+    <div className="min-h-screen bg-slate-900 text-slate-100">
+      {/* Header */}
+      <header className="bg-slate-800 border-b border-slate-700 p-4 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-white">深色模式預覽</h1>
+          <p className="text-xs text-slate-400">Dark Mode UI Preview</p>
+        </div>
+        <button 
+          onClick={onExit}
+          className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold transition-colors"
+        >
+          返回登入
+        </button>
+      </header>
+
+      {/* Main Content */}
+      <main className="p-6 space-y-6 max-w-md mx-auto">
+        
+        {/* 1. 地點選擇卡片 */}
+        <div className="bg-slate-800 rounded-[2rem] p-6 shadow-xl border border-slate-700">
+          <h3 className="text-sm font-bold text-slate-400 mb-3 uppercase tracking-wider">打卡地點</h3>
+          <select className="w-full bg-slate-700 border border-slate-600 rounded-xl p-3 text-white font-bold focus:ring-2 focus:ring-[#0bc6a8] outline-none">
+            <option>總公司</option>
+            <option>台北分公司</option>
+            <option>高雄辦公室</option>
+          </select>
+          
+          <div className="flex items-center gap-2 mt-4 text-xs">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#0bc6a8]"></span>
+            <span className="text-slate-400">GPS 範圍內</span>
+            <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-bold ml-auto">IP 符合</span>
+          </div>
+        </div>
+
+        {/* 2. 地圖區塊 */}
+        <div className="bg-slate-800 rounded-[2rem] p-3 shadow-xl border border-slate-700">
+          <div className="relative w-full aspect-[16/9] rounded-[1.5rem] overflow-hidden bg-slate-700 flex items-center justify-center">
+            <span className="text-slate-500 text-sm">地圖預覽區</span>
+          </div>
+        </div>
+
+        {/* 3. 打卡按鈕 */}
+        <div className="space-y-4">
+          {/* 上班按鈕 */}
+          <button className="w-full h-24 rounded-[2rem] bg-[#0bc6a8] hover:bg-[#09b095] text-white shadow-[0_15px_30px_-10px_rgba(11,198,168,0.4)] flex items-center justify-between px-8 transition-all active:scale-[0.98]">
+            <div className="flex flex-col items-start gap-1">
+              <span className="text-2xl font-black tracking-wide">上班打卡</span>
+              <span className="text-xs font-medium opacity-80 tracking-widest">CLOCK IN</span>
+            </div>
+            <div className="w-12 h-12 rounded-full border-2 border-white/30 flex items-center justify-center">
+              →
+            </div>
+          </button>
+
+          {/* 下班按鈕 */}
+          <button className="w-full h-24 rounded-[2rem] bg-[#ff9f28] hover:bg-[#f59015] text-white shadow-[0_15px_30px_-10px_rgba(255,159,40,0.4)] flex items-center justify-between px-8 transition-all active:scale-[0.98]">
+            <div className="flex flex-col items-start gap-1">
+              <span className="text-2xl font-black tracking-wide">下班打卡</span>
+              <span className="text-xs font-medium opacity-80 tracking-widest">CLOCK OUT</span>
+            </div>
+            <div className="w-12 h-12 rounded-full border-2 border-white/30 flex items-center justify-center">
+              ←
+            </div>
+          </button>
+        </div>
+
+        {/* 4. 統計卡片 */}
+        <div className="bg-slate-800 rounded-[2rem] p-6 shadow-xl border border-slate-700">
+          <h3 className="text-lg font-black text-white mb-4">當月統計</h3>
+          
+          <div className="space-y-3">
+            {/* 總工時 */}
+            <div className="bg-slate-700 rounded-xl p-4 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">總工時</div>
+                <div className="text-sm text-slate-500 mt-0.5">本月累計</div>
+              </div>
+              <div className="text-3xl font-black text-[#0bc6a8]">160<span className="text-base text-slate-400 ml-1">H</span></div>
+            </div>
+
+            {/* 遲到次數 */}
+            <div className="bg-slate-700 rounded-xl p-4 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">遲到次數</div>
+                <div className="text-sm text-slate-500 mt-0.5">本月累計</div>
+              </div>
+              <div className="text-3xl font-black text-[#ff9f28]">2<span className="text-base text-slate-400 ml-1">次</span></div>
+            </div>
+
+            {/* 早退次數 */}
+            <div className="bg-slate-700 rounded-xl p-4 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">早退次數</div>
+                <div className="text-sm text-slate-500 mt-0.5">本月累計</div>
+              </div>
+              <div className="text-3xl font-black text-red-500">1<span className="text-base text-slate-400 ml-1">次</span></div>
+            </div>
+          </div>
+        </div>
+
+        {/* 5. 申請表單預覽 */}
+        <div className="bg-slate-800 rounded-[2rem] p-6 shadow-xl border border-slate-700">
+          <h3 className="text-lg font-black text-white mb-4">補打卡申請</h3>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">補打卡日期</label>
+              <input 
+                type="date"
+                className="w-full p-3 bg-slate-700 border border-slate-600 rounded-xl text-white font-bold focus:ring-2 focus:ring-[#0bc6a8] outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">類型</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button className="py-3 rounded-xl font-bold bg-[#0bc6a8] text-white shadow-md">上班</button>
+                <button className="py-3 rounded-xl font-bold bg-slate-700 text-slate-400">下班</button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">申請原因</label>
+              <textarea 
+                placeholder="請簡述補打卡原因..."
+                className="w-full p-3 bg-slate-700 border border-slate-600 rounded-xl text-white placeholder:text-slate-500 focus:ring-2 focus:ring-[#0bc6a8] outline-none resize-none"
+                rows={3}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* 底部說明 */}
+        <div className="text-center py-8">
+          <p className="text-slate-500 text-sm">這是深色模式 UI 預覽</p>
+          <p className="text-slate-600 text-xs mt-1">所有互動功能已禁用</p>
+        </div>
+
+      </main>
+    </div>
+  );
+};
 
 // --- Modal Component (保持不變) ---
 const ModalDialog = ({ isOpen, type, message, onConfirm, onCancel }: any) => {
@@ -81,6 +238,23 @@ interface User {
 const SESSION_DURATION = 21 * 24 * 60 * 60 * 1000;
 
 const App: React.FC = () => {
+  // [新增] 深色模式狀態
+  const [isDark, setIsDark] = useState(() => {
+    try {
+      return localStorage.getItem('dark_mode') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleDark = () => {
+    setIsDark(prev => {
+      const newValue = !prev;
+      localStorage.setItem('dark_mode', String(newValue));
+      return newValue;
+    });
+  };
+
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showAdmin, setShowAdmin] = useState(false);
@@ -235,6 +409,12 @@ const App: React.FC = () => {
 
   // [結構重構] 根據狀態決定主內容
   const renderContent = () => {
+    // [新增] 深色模式預覽入口
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('dark-preview') === 'true') {
+      return <DarkModePreview onExit={() => window.location.href = '/'} />;
+    }
+    
     if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-blue-500" size={40} /></div>;
     
     // 1. 沒登入 -> 登入頁
@@ -253,16 +433,18 @@ const App: React.FC = () => {
 
   // [關鍵] ModalDialog 放在最外層，永遠不會被 Unmount
   return (
-    <>
-      {renderContent()}
-      <ModalDialog 
-        isOpen={modalConfig.isOpen} 
-        type={modalConfig.type} 
-        message={modalConfig.message} 
-        onConfirm={modalConfig.onConfirm} 
-        onCancel={modalConfig.onCancel} 
-      />
-    </>
+    <DarkModeContext.Provider value={{ isDark, toggleDark }}>
+      <div className={isDark ? 'dark' : ''}>
+        {renderContent()}
+        <ModalDialog 
+          isOpen={modalConfig.isOpen} 
+          type={modalConfig.type} 
+          message={modalConfig.message} 
+          onConfirm={modalConfig.onConfirm} 
+          onCancel={modalConfig.onCancel} 
+        />
+      </div>
+    </DarkModeContext.Provider>
   );
 };
 

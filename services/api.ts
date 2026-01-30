@@ -70,4 +70,7 @@ export const api = {
   
   getMonthlyStats: (uid: string, name: string) => 
     post("getMonthlyStats", { uid, name }),
+  // 管理員取得所有員工清單
+  adminGetAllStaff: () => 
+    post("adminGetAllStaff"),
 };

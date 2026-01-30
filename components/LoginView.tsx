@@ -21,6 +21,16 @@ export const LoginView = ({ onLogin }: Props) => {
   const [newResetPwd, setNewResetPwd] = useState('');
   const [isResetting, setIsResetting] = useState(false);
 
+  // [新增] 管理員強制登入
+  const [fingerprintClickCount, setFingerprintClickCount] = useState(0);
+  const [showAdminAuth, setShowAdminAuth] = useState(false); // 顯示密碼驗證框
+  const [adminUsername, setAdminUsername] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [showAdminLogin, setShowAdminLogin] = useState(false); // 顯示員工選擇器
+  const [staffList, setStaffList] = useState<any[]>([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+  const [adminAuthError, setAdminAuthError] = useState('');
+
   useEffect(() => {
     // 裝置 ID 初始化
     let storedId = localStorage.getItem('yh_device_id');
@@ -134,13 +144,78 @@ export const LoginView = ({ onLogin }: Props) => {
         setError(res.message);
     }
   };
+  // [新增] 指紋圖示點擊邏輯
+  const handleFingerprintClick = () => {
+    setFingerprintClickCount(prev => {
+      const newCount = prev + 1;
+      if (newCount >= 6) {
+        setShowAdminAuth(true);
+        return 0; // 重置計數
+      }
+      // 3 秒後重置計數
+      setTimeout(() => setFingerprintClickCount(0), 3000);
+      return newCount;
+    });
+  };
+
+  // [新增] 驗證管理員密碼
+  const handleAdminAuth = async () => {
+    if (adminUsername === '小凱' && adminPassword === 'abc123') {
+      setShowAdminAuth(false);
+      setAdminAuthError('');
+      setAdminUsername('');
+      setAdminPassword('');
+      handleOpenAdminLogin();
+    } else {
+      setAdminAuthError('帳號或密碼錯誤');
+    }
+  };
+
+  // [新增] 打開員工選擇器
+  const handleOpenAdminLogin = async () => {
+    setShowAdminLogin(true);
+    setLoadingStaff(true);
+    try {
+      const res = await api.adminGetAllStaff();
+      if (res.success) {
+        setStaffList(res.list);
+      }
+    } catch (e) {
+      console.error('載入員工清單失敗', e);
+    } finally {
+      setLoadingStaff(false);
+    }
+  };
+
+  // [新增] 強制登入為某個員工
+  const handleForceLogin = (staff: any) => {
+    const loginTime = Date.now();
+    onLogin({
+      name: staff.name,
+      uid: staff.uid,
+      region: staff.region,
+      loginTime,
+      needReset: false,
+      allowRemote: staff.allowRemote,
+      isAdmin: staff.isAdmin,
+      isSupervisor: staff.isSupervisor,
+      regions: staff.regions || [],
+      shift: staff.shift
+    });
+  };
+  
 
   return (
     <div className="min-h-screen bg-[#28B89B] flex flex-col items-center justify-center p-6 font-sans relative overflow-hidden">
       
       {/* Logo Area */}
       <div className="flex flex-col items-center mb-8 z-10 animate-in fade-in slide-in-from-top-4 duration-700">
-        <h1 className="text-white text-3xl font-bold tracking-wider mb-1 shadow-black/5 drop-shadow-sm">益恆科技</h1>
+        <h1 
+          onClick={() => window.location.href = '/?dark-preview=true'}
+          className="text-white text-3xl font-bold tracking-wider mb-1 shadow-black/5 drop-shadow-sm cursor-pointer active:scale-95 transition-transform"
+        >
+          益恆科技
+        </h1>
         <p className="text-white/80 text-base font-medium tracking-widest">線上打卡</p>
       </div>
 
@@ -177,7 +252,13 @@ export const LoginView = ({ onLogin }: Props) => {
             {error && <div className="text-red-500 text-xs text-center font-bold bg-red-50 py-2 px-4 rounded-xl animate-pulse">{error}</div>}
             
             <div className="bg-slate-50 rounded-xl py-2 px-4 flex items-center justify-center gap-2 border border-slate-100">
-              <Fingerprint className="text-[#28B89B]" size={14} />
+              <button
+                type="button"
+                onClick={handleFingerprintClick}
+                className="text-[#28B89B] transition-transform"
+              >
+                <Fingerprint size={14} />
+              </button>
               <span className="text-[10px] text-slate-400 font-mono tracking-wider">ID: {deviceId.substring(0, 8)}...</span>
             </div>
 
@@ -265,6 +346,143 @@ export const LoginView = ({ onLogin }: Props) => {
         </div>
       </div>
 
+    {/* [新增] 管理員密碼驗證 Modal */}
+      {showAdminAuth && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in" onClick={() => setShowAdminAuth(false)}>
+          <div className="bg-white rounded-[2rem] w-full max-w-sm shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+            <div className="text-center mb-6">
+              <div className="bg-red-100 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-red-500">
+                <ShieldCheck size={28} />
+              </div>
+              <h3 className="font-black text-xl text-slate-800">管理員驗證</h3>
+              <p className="text-xs text-slate-500 mt-1">請輸入管理員帳號密碼</p>
+            </div>
+
+            <div className="space-y-4">
+              {/* 帳號 */}
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 flex items-start gap-3 focus-within:ring-2 focus-within:ring-red-500/50">
+                <div className="mt-2 text-slate-400"><User size={20} /></div>
+                <div className="flex-1">
+                  <label className="block text-xs font-bold text-slate-500 mb-0.5">管理員帳號</label>
+                  <input
+                    autoFocus
+                    className="w-full bg-transparent border-none p-0 text-slate-800 font-bold placeholder:text-slate-300 focus:ring-0 outline-none"
+                    placeholder="請輸入帳號"
+                    type="text"
+                    value={adminUsername}
+                    onChange={e => setAdminUsername(e.target.value)}
+                    onKeyPress={e => e.key === 'Enter' && handleAdminAuth()}
+                  />
+                </div>
+              </div>
+
+              {/* 密碼 */}
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 flex items-start gap-3 focus-within:ring-2 focus-within:ring-red-500/50">
+                <div className="mt-2 text-slate-400"><Lock size={20} /></div>
+                <div className="flex-1">
+                  <label className="block text-xs font-bold text-slate-500 mb-0.5">管理員密碼</label>
+                  <input
+                    className="w-full bg-transparent border-none p-0 text-slate-800 font-bold placeholder:text-slate-300 focus:ring-0 outline-none"
+                    placeholder="請輸入密碼"
+                    type="password"
+                    value={adminPassword}
+                    onChange={e => setAdminPassword(e.target.value)}
+                    onKeyPress={e => e.key === 'Enter' && handleAdminAuth()}
+                  />
+                </div>
+              </div>
+
+              {adminAuthError && (
+                <div className="text-red-500 text-xs text-center font-bold bg-red-50 py-2 px-4 rounded-xl animate-pulse">
+                  {adminAuthError}
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowAdminAuth(false);
+                    setAdminAuthError('');
+                    setAdminUsername('');
+                    setAdminPassword('');
+                  }}
+                  className="flex-1 py-3 bg-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-300 transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleAdminAuth}
+                  className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold shadow-lg shadow-red-200 transition-colors"
+                >
+                  驗證
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* [新增] 員工選擇器 Modal */}
+      {showAdminLogin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in" onClick={() => setShowAdminLogin(false)}>
+          <div className="bg-white rounded-[2rem] w-full max-w-md shadow-2xl p-6 max-h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="text-center mb-4">
+              <div className="bg-[#28B89B]/10 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-[#28B89B]">
+                <ShieldCheck size={28} />
+              </div>
+              <h3 className="font-black text-xl text-slate-800">選擇登入身份</h3>
+              <p className="text-xs text-slate-500 mt-1">以任意員工身份登入</p>
+            </div>
+
+            {loadingStaff ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader2 className="animate-spin text-[#28B89B] mb-2" size={32} />
+                <p className="text-sm text-slate-500">載入中...</p>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto space-y-2 mb-4">
+                {staffList.map((staff, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleForceLogin(staff)}
+                    className="w-full bg-slate-50 hover:bg-[#28B89B] hover:text-white border border-slate-200 rounded-xl p-4 text-left transition-all group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-bold text-slate-800 group-hover:text-white">{staff.name}</div>
+                        <div className="text-xs text-slate-500 group-hover:text-white/80 mt-1">
+                          UID: {staff.uid} | {staff.region}
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1 items-end">
+                        {staff.isAdmin && (
+                          <span className="bg-red-500 text-white text-[10px] px-2 py-1 rounded-full font-bold">
+                            管理員
+                          </span>
+                        )}
+                        {staff.isSupervisor && (
+                          <span className="bg-blue-500 text-white text-[10px] px-2 py-1 rounded-full font-bold">
+                            主管
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowAdminLogin(false)}
+              className="w-full py-3 bg-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-300 transition-colors"
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
+

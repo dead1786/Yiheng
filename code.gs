@@ -38,6 +38,9 @@ function doPost(e) {
   }
 
   const action = postData.action;
+  // [Debug] 記錄收到的請求
+  Logger.log("收到請求 action: " + action);
+  Logger.log("完整 postData: " + JSON.stringify(postData));
   if (action === "login") return responseJSON(handleLogin(postData.name, postData.password, postData.deviceId));
   if (action === "changePassword") return responseJSON(handleChangePassword(postData.name, postData.newPassword));
   if (action === "updatePassword") return responseJSON(handleUpdatePassword(postData));
@@ -49,6 +52,7 @@ function doPost(e) {
   if (action === "getHistory") return responseJSON(handleGetHistory(postData.uid, postData.loginTime));
   if (action === "checkStatus") return responseJSON(handleCheckStatus(postData.uid, postData.loginTime, postData.name));
   if (action === "getLocations") return responseJSON(getLocations());
+  if (action === "getMonthlyStats") return responseJSON(handleGetMonthlyStats(postData));
   
   // --- 管理員後台功能 ---
   if (action === "adminGetData") return responseJSON(handleAdminGetData(postData));
@@ -61,6 +65,8 @@ function doPost(e) {
   if (action === "adminGetStaffHistory") return responseJSON(handleAdminGetStaffHistory(postData.targetUid));
   if (action === "adminUpdateShift") return responseJSON(handleAdminUpdateShift(postData));
   if (action === "adminGetSheetList") return responseJSON(handleAdminGetSheetList());
+  if (action === "getMonthlyStats") return responseJSON(handleGetMonthlyStats(postData));
+  if (action === "adminGetAllStaff") return responseJSON(handleAdminGetAllStaff(postData));
   
 // ========== 申請系統 API ==========
   if (action === "submitMakeupRequest") return responseJSON(handleSubmitMakeupRequest(postData));
@@ -1913,16 +1919,32 @@ function handleGetPendingRequests(data) {
       for (let i = 1; i < makeupData.length; i++) {
         const row = makeupData[i];
         if (row[9] === "待審" && regions.includes(row[3])) { // 狀態=待審 且 分區符合
+          // 格式化日期和時間
+          let dateStr = row[4];
+          if (row[4] instanceof Date) {
+            dateStr = Utilities.formatDate(row[4], "GMT+8", "yyyy-MM-dd");
+          }
+          
+          let timeStr = row[6];
+          if (row[6] instanceof Date) {
+            timeStr = Utilities.formatDate(row[6], "GMT+8", "HH:mm");
+          }
+          
+          let applyTimeStr = row[8];
+          if (row[8] instanceof Date) {
+            applyTimeStr = Utilities.formatDate(row[8], "GMT+8", "yyyy-MM-dd HH:mm:ss");
+          }
+          
           result.makeup.push({
             id: row[0],
             name: row[1],
             uid: row[2],
             region: row[3],
-            date: row[4],
+            date: dateStr,
             type: row[5],
-            defaultTime: row[6],
+            defaultTime: timeStr,
             reason: row[7],
-            applyTime: row[8]
+            applyTime: applyTimeStr
           });
         }
       }
@@ -1935,18 +1957,34 @@ function handleGetPendingRequests(data) {
       for (let i = 1; i < leaveData.length; i++) {
         const row = leaveData[i];
         if (row[11] === "待審" && regions.includes(row[3])) {
+          // 格式化日期
+          let dateStartStr = row[4];
+          if (row[4] instanceof Date) {
+            dateStartStr = Utilities.formatDate(row[4], "GMT+8", "yyyy-MM-dd");
+          }
+          
+          let dateEndStr = row[5];
+          if (row[5] instanceof Date) {
+            dateEndStr = Utilities.formatDate(row[5], "GMT+8", "yyyy-MM-dd");
+          }
+          
+          let applyTimeStr = row[10];
+          if (row[10] instanceof Date) {
+            applyTimeStr = Utilities.formatDate(row[10], "GMT+8", "yyyy-MM-dd HH:mm:ss");
+          }
+          
           result.leave.push({
             id: row[0],
             name: row[1],
             uid: row[2],
             region: row[3],
-            dateStart: row[4],
-            dateEnd: row[5],
+            dateStart: dateStartStr,
+            dateEnd: dateEndStr,
             days: row[6],
             dayType: row[7],
             leaveType: row[8],
             reason: row[9],
-            applyTime: row[10]
+            applyTime: applyTimeStr
           });
         }
       }
@@ -1963,7 +2001,8 @@ function handleGetPendingRequests(data) {
  */
 function handleApproveRequest(data) {
   try {
-    const { requestId, type, action, supervisorName, approveReason, adjustedTime } = data;
+    const { requestId, type, approveAction, supervisorName, approveReason, adjustedTime } = data;
+    const action = approveAction; // 為了保持後續代碼不變
     const ss = SpreadsheetApp.openById(SHEET_ID);
     
     if (type === 'makeup') {
@@ -1981,21 +2020,61 @@ function handleApproveRequest(data) {
           sheet.getRange(i + 1, 11).setValue(supervisorName); // 主管姓名
           sheet.getRange(i + 1, 12).setValue(approveReason); // 核准原因
           sheet.getRange(i + 1, 13).setValue(approveTime); // 核准時間
-          sheet.getRange(i + 1, 14).setValue(finalTime); // 最終時間
+          sheet.getRange(i + 1, 14).setNumberFormat('@').setValue(finalTime); // 最終時間（文字格式）
           
           // 如果核准，寫入正式打卡紀錄
           if (action === 'approve') {
             const recordSheet = ss.getSheetByName("打卡紀錄");
-            const clockDate = sheetData[i][4]; // 補打卡日期
-            const clockType = sheetData[i][5]; // 上班/下班
-            const fullDateTime = clockDate + " " + finalTime;
             
+            // 取得基本資料
+            const employeeName = sheetData[i][1];  // 姓名
+            const employeeUid = sheetData[i][2];   // UID
+            const employeeRegion = sheetData[i][3]; // 分區
+            const clockDate = sheetData[i][4];     // 補打卡日期（例如：2026-01-30）
+            const clockType = sheetData[i][5];     // 上班/下班
+            
+            // 格式化日期
+            let dateStr = clockDate;
+            if (clockDate instanceof Date) {
+              dateStr = Utilities.formatDate(clockDate, "GMT+8", "yyyy-MM-dd");
+            }
+            
+            // 組合完整時間戳記
+            const fullDateTime = dateStr + " " + finalTime; // 例如：2026-01-30 08:00
+            const timestamp = new Date(fullDateTime);
+            
+            // 取得員工班別
+            const staffSheet = ss.getSheetByName(SHEET_STAFF);
+            const staffData = staffSheet.getDataRange().getValues();
+            const staffRow = staffData.find(row => row[14] === employeeUid);
+            const shiftName = staffRow ? staffRow[11] : ""; // 班別在第 11 欄
+            
+            // 取得申請原因
+            const applyReason = sheetData[i][7]; // 申請原因在第 7 欄
+            
+            // 組合備註：主管姓名 + 核准原因
+            const remarkNote = supervisorName + " - " + approveReason;
+            
+            // 寫入打卡紀錄（按照正確的欄位順序）
             recordSheet.appendRow([
-              sheetData[i][1], // 姓名
-              sheetData[i][2], // UID
-              fullDateTime,    // 打卡時間
-              "手動補登",      // 備註
-              clockType        // 類型
+              timestamp,           // 1. 時間戳記
+              dateStr,             // 2. 日期
+              finalTime,           // 3. 時間
+              employeeName,        // 4. 姓名
+              clockType,           // 5. 動作（上班/下班）
+              "手動補登",          // 6. 地點
+              "✅ 補登成功",       // 7. 打卡結果
+              applyReason,         // 8. GPS座標（填入申請原因）
+              remarkNote,          // 9. 備註（主管姓名 + 核准原因）
+              "",           // 10. 班別
+              "",                  // 11. 異常判斷（會由工作表公式自動計算）
+              "",                  // 12. 異常時數（會由工作表公式自動計算）
+              "",                  // 13. 大夜班(需有班表)
+              "",                  // 14. 大夜班(需有班表)
+              "",                  // 15. 大夜班(需有班表)
+              "",                  // 16. 打卡地址(GPS)
+              employeeUid,         // 17. UID
+              employeeRegion       // 18. 分區
             ]);
           }
           
@@ -2122,5 +2201,99 @@ function sendLinePushMessage(userId, message) {
     UrlFetchApp.fetch(url, options);
   } catch (e) {
     Logger.log("LINE 推送失敗：" + e.toString());
+  }
+}
+
+/**
+ * 取得員工當月統計數據
+ */
+function handleGetMonthlyStats(data) {
+  try {
+    const { uid, name } = data;
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const statsSheet = ss.getSheetByName("當月統計");
+    
+    if (!statsSheet) {
+      return { success: false, message: "找不到統計工作表" };
+    }
+    
+    const statsData = statsSheet.getDataRange().getValues();
+    
+    // 從第 2 行開始搜尋（第 1 行是標題）
+    for (let i = 1; i < statsData.length; i++) {
+      const row = statsData[i];
+      const rowNameWithUid = row[14]; // N 欄：姓名+UID（例如：李昶昕u_0vy3a2e3）
+      
+      // 檢查是否符合該員工（比對姓名+UID）
+      const targetNameWithUid = name + uid;
+      if (rowNameWithUid === targetNameWithUid) {
+        // 找到了，回傳統計資料
+        const month = row[12];        // M 欄：統計月份
+        const totalHours = row[15];   // P 欄：總工時(H)
+        const lateCount = row[16];    // Q 欄：遲到次數
+        const earlyCount = row[17];   // R 欄：早退次數
+        
+        // 格式化月份（如果是 Date 物件）
+        let monthStr = month;
+        if (month instanceof Date) {
+          monthStr = Utilities.formatDate(month, "GMT+8", "yyyy-MM");
+        }
+        
+        return {
+          success: true,
+          stats: {
+            month: monthStr,
+            totalHours: totalHours || 0,
+            lateCount: lateCount || 0,
+            earlyCount: earlyCount || 0
+          }
+        };
+      }
+    }
+    
+    // 找不到該員工的統計資料
+    return {
+      success: true,
+      stats: {
+        month: new Date().toISOString().slice(0, 7), // 當月 yyyy-MM
+        totalHours: 0,
+        lateCount: 0,
+        earlyCount: 0
+      },
+      message: "尚無統計資料"
+    };
+    
+  } catch (e) {
+    return { success: false, message: "取得統計失敗：" + e.toString() };
+  }
+}
+
+/**
+ * 管理員取得所有員工清單
+ */
+function handleAdminGetAllStaff(data) {
+  try {
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const staffSheet = ss.getSheetByName(SHEET_STAFF);
+    const staffData = staffSheet.getDataRange().getValues();
+    
+    const list = [];
+    for (let i = 1; i < staffData.length; i++) {
+      const row = staffData[i];
+      list.push({
+        name: row[0],
+        uid: row[14],
+        region: row[13],
+        allowRemote: row[10] === 'TRUE',
+        isAdmin: row[12] === 'TRUE',
+        isSupervisor: row[15] === 'TRUE',
+        regions: row[16] ? row[16].split(',').map(r => r.trim()) : [],
+        shift: row[11]
+      });
+    }
+    
+    return { success: true, list };
+  } catch (e) {
+    return { success: false, message: "取得員工清單失敗：" + e.toString() };
   }
 }
