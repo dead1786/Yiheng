@@ -431,8 +431,7 @@ const App: React.FC = () => {
     return <ClockInView user={user} onLogout={handleLogout} onAlert={showAlert} onConfirm={showConfirm} onEnterAdmin={() => setShowAdmin(true)} />;
   };
 
-  // [關鍵] ModalDialog 放在最外層，永遠不會被 Unmount
-  // 監聽 isDark 變化，動態更新 HTML 的 class
+  // [新增] 監聽 isDark 變化，動態更新 <html> 的 class
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
@@ -441,6 +440,7 @@ const App: React.FC = () => {
     }
   }, [isDark]);
 
+  // [關鍵] ModalDialog 放在最外層，永遠不會被 Unmount
   return (
     <DarkModeContext.Provider value={{ isDark, toggleDark }}>
       <>
