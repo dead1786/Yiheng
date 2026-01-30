@@ -1186,7 +1186,7 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                       ) : (
                         <div className="space-y-2">
                           {pendingRequests.makeup.map((req) => (
-                            <div key={req.id} className="bg-[#334155] p-4 rounded-xl border border-slate-600 hover:border-blue-500/50 transition-all">
+                           <div key={req.id} className="bg-[#334155] p-4 rounded-xl border border-slate-600 hover:border-blue-500/50 transition-all">
                               <div className="flex justify-between items-start mb-2">
                                 <div>
                                   <h4 className="font-bold text-white">{req.name}</h4>
@@ -1198,10 +1198,18 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                               </div>
                               
                               <div className="space-y-1 mb-3 text-sm">
-                                <p className="text-slate-300"><span className="text-slate-500">日期：</span>{req.date}</p>
-                                <p className="text-slate-300"><span className="text-slate-500">時間：</span>{req.defaultTime}</p>
+                                <p className="text-slate-300">
+                                  <span className="text-slate-500">日期：</span>
+                                  {typeof req.date === 'string' ? req.date : new Date(req.date).toLocaleDateString('zh-TW')}
+                                </p>
+                                <p className="text-slate-300">
+                                  <span className="text-slate-500">時間：</span>
+                                  {typeof req.defaultTime === 'string' ? req.defaultTime : new Date(req.defaultTime).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                                </p>
                                 <p className="text-slate-300"><span className="text-slate-500">原因：</span>{req.reason}</p>
-                                <p className="text-xs text-slate-500">申請時間：{req.applyTime}</p>
+                                <p className="text-xs text-slate-500">
+                                  申請時間：{typeof req.applyTime === 'string' ? req.applyTime : new Date(req.applyTime).toLocaleString('zh-TW')}
+                                </p>
                               </div>
                               
                               <button 
