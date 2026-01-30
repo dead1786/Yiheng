@@ -432,9 +432,18 @@ const App: React.FC = () => {
   };
 
   // [關鍵] ModalDialog 放在最外層，永遠不會被 Unmount
+  // 監聽 isDark 變化，動態更新 HTML 的 class
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDark]);
+
   return (
     <DarkModeContext.Provider value={{ isDark, toggleDark }}>
-      <div className={isDark ? 'dark' : ''}>
+      <>
         {renderContent()}
         <ModalDialog 
           isOpen={modalConfig.isOpen} 
@@ -443,7 +452,7 @@ const App: React.FC = () => {
           onConfirm={modalConfig.onConfirm} 
           onCancel={modalConfig.onCancel} 
         />
-      </div>
+      </>
     </DarkModeContext.Provider>
   );
 };
