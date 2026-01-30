@@ -174,14 +174,21 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
     setBlockText(action === 'approve' ? "核准中..." : "駁回中...");
     
     try {
-      const res = await api.approveRequest({
+      // [Debug] 顯示發送的資料
+      const requestData = {
         requestId: approvingRequest.id,
         type: approvingRequest.requestType,
         action,
         supervisorName: user.name,
         approveReason,
         adjustedTime: approvingRequest.requestType === 'makeup' ? adjustedTime : undefined
-      });
+      };
+      console.log("📤 發送審批請求:", requestData);
+      
+      const res = await api.approveRequest(requestData);
+      
+      // [Debug] 顯示後端回應
+      console.log("📥 後端回應:", res);
       
       if (res.success) {
         onAlert(res.message || (action === 'approve' ? "✅ 已核准" : "❌ 已駁回"));
