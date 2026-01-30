@@ -123,6 +123,11 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
   
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // === 統計功能 State ===
+  const [showStatsModal, setShowStatsModal] = useState(false);
+  const [monthlyStats, setMonthlyStats] = useState<any>(null);
+  const [loadingStats, setLoadingStats] = useState(false);
+
   const exitIntentRef = useRef(false);
 
   const getLocationWithRetry = (retryCount = 0) => {
@@ -398,6 +403,24 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
       onAlert(res.message);
     }
   };
+// === 取得統計資料 ===
+  const handleOpenStats = async () => {
+    setShowStatsModal(true);
+    setLoadingStats(true);
+    
+    try {
+      const res = await api.getMonthlyStats(user.uid || '', user.name);
+      if (res.success) {
+        setMonthlyStats(res.stats);
+      } else {
+        onAlert(res.message || "無法取得統計資料");
+      }
+    } catch (e) {
+      onAlert("連線失敗，請稍後再試");
+    } finally {
+      setLoadingStats(false);
+    }
+  };
 
   const isWeekend = (dayStr: string) => (dayStr === "週六" || dayStr === "週日");
 
@@ -655,11 +678,11 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
             <span className="text-[10px] font-bold">紀錄</span>
          </button>
          
-         {/*統計按鈕保留 UI 但移除功能 (無 onClick) */}
-         <div className="flex flex-col items-center gap-1 text-slate-300 cursor-default">
+         {/* 統計按鈕 */}
+         <button onClick={handleOpenStats} className="flex flex-col items-center gap-1 hover:text-[#0bc6a8] transition-colors">
             <BarChart3 size={22} strokeWidth={2.5} />
             <span className="text-[10px] font-bold">統計</span>
-         </div>
+         </button>
 
          <button className="flex flex-col items-center gap-1 text-[#0bc6a8]">
             <Calendar size={22} strokeWidth={2.5} />
@@ -944,6 +967,71 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
                 {isSubmitting ? <Loader2 className="animate-spin mx-auto" size={20} /> : "提交申請"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* === 統計 Modal === */}
+      {showStatsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in" onClick={() => setShowStatsModal(false)}>
+          <div className="bg-white rounded-[2rem] w-full max-w-sm shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+            <div className="text-center mb-6">
+              <div className="bg-gradient-to-br from-blue-500 to-purple-600 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-white shadow-lg">
+                <BarChart3 size={28} />
+              </div>
+              <h3 className="font-black text-xl text-slate-800">當月統計</h3>
+              <p className="text-xs text-slate-500 mt-1">{user.name} 的出勤統計</p>
+            </div>
+
+            {loadingStats ? (
+              <div className="flex flex-col items-center justify-center py-8">
+                <Loader2 className="animate-spin text-blue-500 mb-2" size={32} />
+                <p className="text-sm text-slate-500">載入中...</p>
+              </div>
+            ) : monthlyStats ? (
+              <div className="space-y-3">
+                {/* 統計月份 */}
+                <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 border border-blue-100">
+                  <div className="text-xs text-slate-500 mb-1">統計月份</div>
+                  <div className="text-2xl font-black text-slate-800">{monthlyStats.month}</div>
+                </div>
+
+                {/* 統計數據 */}
+                <div className="grid grid-cols-3 gap-3">
+                  {/* 總工時 */}
+                  <div className="bg-green-50 rounded-xl p-4 text-center border border-green-100">
+                    <div className="text-xs text-green-600 mb-1 font-bold">總工時</div>
+                    <div className="text-2xl font-black text-green-700">{monthlyStats.totalHours}</div>
+                    <div className="text-[10px] text-green-600 mt-1">小時</div>
+                  </div>
+
+                  {/* 遲到次數 */}
+                  <div className="bg-orange-50 rounded-xl p-4 text-center border border-orange-100">
+                    <div className="text-xs text-orange-600 mb-1 font-bold">遲到</div>
+                    <div className="text-2xl font-black text-orange-700">{monthlyStats.lateCount}</div>
+                    <div className="text-[10px] text-orange-600 mt-1">次</div>
+                  </div>
+
+                  {/* 早退次數 */}
+                  <div className="bg-red-50 rounded-xl p-4 text-center border border-red-100">
+                    <div className="text-xs text-red-600 mb-1 font-bold">早退</div>
+                    <div className="text-2xl font-black text-red-700">{monthlyStats.earlyCount}</div>
+                    <div className="text-[10px] text-red-600 mt-1">次</div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-slate-500">
+                <p className="text-sm">無統計資料</p>
+              </div>
+            )}
+
+            <button 
+              onClick={() => setShowStatsModal(false)}
+              className="w-full mt-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl font-bold hover:from-blue-600 hover:to-purple-700 shadow-lg shadow-blue-200 transition-all"
+            >
+              關閉
+            </button>
           </div>
         </div>
       )}

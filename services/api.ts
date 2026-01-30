@@ -67,4 +67,7 @@ export const api = {
   
   approveRequest: (data: { requestId: string, type: 'makeup' | 'leave', approveAction: 'approve' | 'reject', supervisorName: string, approveReason: string, adjustedTime?: string }) => 
     post("approveRequest", data),
+  
+  getMonthlyStats: (uid: string, name: string) => 
+    post("getMonthlyStats", { uid, name }),
 };
