@@ -9,17 +9,51 @@ import { api } from './services/api';
 // --- Modal Component (保持不變) ---
 const ModalDialog = ({ isOpen, type, message, onConfirm, onCancel }: any) => {
   if (!isOpen) return null;
+  
+  // 判斷是否為錯誤訊息（包含「失敗」「錯誤」等關鍵字）
+  const isError = message.includes('失敗') || message.includes('錯誤') || message.includes('無法');
+  const isSuccess = message.includes('✅') || message.includes('成功') || message.includes('完成');
+  
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 transform transition-all scale-100">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-[2rem] shadow-2xl max-w-sm w-full p-6 animate-in zoom-in duration-300">
         <div className="flex flex-col items-center text-center gap-4">
-          <div className={`p-3 rounded-full ${type === 'alert' ? 'bg-blue-100 text-blue-600' : 'bg-yellow-100 text-yellow-600'}`}>
-            {type === 'alert' ? <Info size={32} /> : <AlertTriangle size={32} />}
+          {/* 圖示 */}
+          <div className={`p-4 rounded-full w-16 h-16 flex items-center justify-center ${
+            isError ? 'bg-red-50 text-red-500' : 
+            isSuccess ? 'bg-green-50 text-green-500' : 
+            type === 'confirm' ? 'bg-orange-50 text-orange-500' : 
+            'bg-blue-50 text-blue-500'
+          }`}>
+            {isError ? <AlertTriangle size={32} /> : 
+             isSuccess ? <CheckCircle size={32} /> :
+             type === 'confirm' ? <AlertTriangle size={32} /> : 
+             <Info size={32} />}
           </div>
-          <p className="text-gray-800 font-medium text-lg leading-relaxed whitespace-pre-wrap">{message}</p>
+          
+          {/* 訊息內容 */}
+          <p className="text-slate-800 font-bold text-base leading-relaxed whitespace-pre-wrap">{message}</p>
+          
+          {/* 按鈕 */}
           <div className="flex gap-3 w-full mt-2">
-            {type === 'confirm' && (<button onClick={onCancel} className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors">取消</button>)}
-            <button onClick={onConfirm} className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-colors">確定</button>
+            {type === 'confirm' && (
+              <button 
+                onClick={onCancel} 
+                className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+              >
+                取消
+              </button>
+            )}
+            <button 
+              onClick={onConfirm} 
+              className={`flex-1 py-3 rounded-xl font-bold shadow-lg transition-colors ${
+                isError ? 'bg-red-500 text-white hover:bg-red-600 shadow-red-200' :
+                isSuccess ? 'bg-green-500 text-white hover:bg-green-600 shadow-green-200' :
+                'bg-[#0bc6a8] text-white hover:bg-[#09b095] shadow-teal-200'
+              }`}
+            >
+              確定
+            </button>
           </div>
         </div>
       </div>
