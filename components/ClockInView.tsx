@@ -4,7 +4,7 @@ import {
   MapPin, LogOut, Navigation, CheckCircle, ShieldCheck, History, X, 
   Crown, KeyRound, Loader2, RefreshCw, Timer, Calculator,
   Building2, Bell, Wifi, Cloud, LogIn, Calendar, BarChart3, Settings, Lock, 
-  ToggleRight, ToggleLeft, ArrowRightFromLine
+  ToggleRight, ToggleLeft, ArrowRightFromLine,FileText, FilePlus
 } from 'lucide-react';
 
 const getDistanceInMeters = (lat1: number, lng1: number, lat2: number, lng2: number) => {
@@ -102,6 +102,26 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
   const [pwdForm, setPwdForm] = useState({ old: '', new1: '', new2: '' });
   
   const [lastSuccess, setLastSuccess] = useState('');
+
+  // === 申請功能 State ===
+  const [showRequestMenu, setShowRequestMenu] = useState(false);
+  const [showMakeupForm, setShowMakeupForm] = useState(false);
+  const [showLeaveForm, setShowLeaveForm] = useState(false);
+  
+  // 補打卡表單資料
+  const [makeupDate, setMakeupDate] = useState('');
+  const [makeupType, setMakeupType] = useState<'in' | 'out'>('in');
+  const [makeupReason, setMakeupReason] = useState('');
+  
+  // 請假表單資料
+  const [leaveDateStart, setLeaveDateStart] = useState('');
+  const [leaveDateEnd, setLeaveDateEnd] = useState('');
+  const [leaveDays, setLeaveDays] = useState(1);
+  const [leaveHalfDay, setLeaveHalfDay] = useState(false);
+  const [leaveType, setLeaveType] = useState('事假');
+  const [leaveReason, setLeaveReason] = useState('');
+  
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const exitIntentRef = useRef(false);
 
@@ -321,6 +341,62 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
       setShowChangePwd(false);
       setPwdForm({ old: '', new1: '', new2: '' });
     } else { onAlert(res.message); }
+  };
+
+  // === 提交補打卡申請 ===
+  const handleSubmitMakeup = async () => {
+    if (!makeupDate || !makeupReason.trim()) {
+      return onAlert("請填寫完整資料");
+    }
+    
+    setIsSubmitting(true);
+    const res = await api.submitMakeupRequest({
+      uid: user.uid || '',
+      name: user.name,
+      date: makeupDate,
+      type: makeupType,
+      reason: makeupReason
+    });
+    setIsSubmitting(false);
+    
+    if (res.success) {
+      onAlert("✅ 補打卡申請已提交！\n請等待主管審核。");
+      setShowMakeupForm(false);
+      setMakeupDate('');
+      setMakeupReason('');
+    } else {
+      onAlert(res.message);
+    }
+  };
+
+  // === 提交請假申請 ===
+  const handleSubmitLeave = async () => {
+    if (!leaveDateStart || !leaveDateEnd || !leaveReason.trim()) {
+      return onAlert("請填寫完整資料");
+    }
+    
+    setIsSubmitting(true);
+    const res = await api.submitLeaveRequest({
+      uid: user.uid || '',
+      name: user.name,
+      dateStart: leaveDateStart,
+      dateEnd: leaveDateEnd,
+      days: leaveDays,
+      halfDay: leaveHalfDay,
+      leaveType: leaveType,
+      reason: leaveReason
+    });
+    setIsSubmitting(false);
+    
+    if (res.success) {
+      onAlert("✅ 請假申請已提交！\n此功能尚未完全開放，請耐心等候。");
+      setShowLeaveForm(false);
+      setLeaveDateStart('');
+      setLeaveDateEnd('');
+      setLeaveReason('');
+    } else {
+      onAlert(res.message);
+    }
   };
 
   const isWeekend = (dayStr: string) => (dayStr === "週六" || dayStr === "週日");
@@ -573,21 +649,28 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
 
       {/* 6. Bottom Navigation (White, Fixed) */}
       <nav className="fixed bottom-0 w-full bg-white border-t border-slate-100 pb-6 pt-2 px-6 flex justify-between items-center z-40 text-slate-400">
-         <button className="flex flex-col items-center gap-1 text-[#0bc6a8]">
-            <Calendar size={22} strokeWidth={2.5} />
-            <span className="text-[10px] font-bold">打卡</span>
-         </button>
          
          <button onClick={() => fetchHistory(true)} className="flex flex-col items-center gap-1 hover:text-[#0bc6a8] transition-colors">
             <History size={22} strokeWidth={2.5} />
             <span className="text-[10px] font-bold">紀錄</span>
          </button>
          
-         {/* [修改] 統計按鈕保留 UI 但移除功能 (無 onClick) */}
+         {/*統計按鈕保留 UI 但移除功能 (無 onClick) */}
          <div className="flex flex-col items-center gap-1 text-slate-300 cursor-default">
             <BarChart3 size={22} strokeWidth={2.5} />
             <span className="text-[10px] font-bold">統計</span>
          </div>
+
+         <button className="flex flex-col items-center gap-1 text-[#0bc6a8]">
+            <Calendar size={22} strokeWidth={2.5} />
+            <span className="text-[10px] font-bold">打卡</span>
+         </button>
+
+         {/* 申請按鈕 */}
+         <button onClick={() => setShowRequestMenu(true)} className="flex flex-col items-center gap-1 hover:text-[#0bc6a8] transition-colors">
+            <FileText size={22} strokeWidth={2.5} />
+            <span className="text-[10px] font-bold">申請</span>
+         </button>
 
          <button onClick={() => setShowChangePwd(true)} className="flex flex-col items-center gap-1 hover:text-[#0bc6a8] transition-colors">
             <Settings size={22} strokeWidth={2.5} />
@@ -641,6 +724,225 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
             <div className="flex gap-3 mt-8">
               <button onClick={() => setShowChangePwd(false)} className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-xl font-bold hover:bg-slate-200">取消</button>
               <button onClick={handleChangePassword} className="flex-1 py-3 bg-[#0bc6a8] text-white rounded-xl font-bold hover:bg-[#09b095] shadow-lg shadow-teal-200">確認修改</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* === 申請選單彈窗 === */}
+      {showRequestMenu && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in" onClick={() => setShowRequestMenu(false)}>
+          <div className="bg-white rounded-[2rem] w-full max-w-xs shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+            <div className="text-center mb-6">
+              <div className="bg-slate-50 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-[#0bc6a8]">
+                <FileText size={28} />
+              </div>
+              <h3 className="font-black text-xl text-slate-800">選擇申請類型</h3>
+            </div>
+            
+            <div className="space-y-3">
+              <button 
+                onClick={() => { setShowRequestMenu(false); setShowMakeupForm(true); }}
+                className="w-full bg-[#0bc6a8] hover:bg-[#09b095] text-white py-4 rounded-xl font-bold text-base shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+              >
+                <FilePlus size={20} />
+                補打卡申請
+              </button>
+              
+              <button 
+                disabled
+                className="w-full bg-slate-200 text-slate-400 py-4 rounded-xl font-bold text-base cursor-not-allowed flex items-center justify-center gap-2 opacity-50"
+              >
+                <Calendar size={20} />
+                請假申請（尚未開放）
+              </button>
+            </div>
+            
+            <button 
+              onClick={() => setShowRequestMenu(false)}
+              className="w-full mt-4 py-3 text-slate-500 font-bold hover:text-slate-700 transition-colors"
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* === 補打卡申請表單 === */}
+      {showMakeupForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in overflow-y-auto" onClick={() => setShowMakeupForm(false)}>
+          <div className="bg-white rounded-[2rem] w-full max-w-sm shadow-2xl p-6 my-8" onClick={e => e.stopPropagation()}>
+            <div className="text-center mb-6">
+              <div className="bg-blue-50 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-blue-500">
+                <FilePlus size={28} />
+              </div>
+              <h3 className="font-black text-xl text-slate-800">補打卡申請</h3>
+            </div>
+            
+            <div className="space-y-4">
+              {/* 日期選擇 */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">補打卡日期</label>
+                <input 
+                  type="date"
+                  value={makeupDate}
+                  onChange={(e) => setMakeupDate(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border-none rounded-xl text-slate-800 font-bold focus:ring-2 focus:ring-blue-200 outline-none"
+                />
+              </div>
+              
+              {/* 類型選擇 */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">類型</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button 
+                    onClick={() => setMakeupType('in')}
+                    className={`py-3 rounded-xl font-bold transition-all ${makeupType === 'in' ? 'bg-[#0bc6a8] text-white shadow-md' : 'bg-slate-100 text-slate-500'}`}
+                  >
+                    上班
+                  </button>
+                  <button 
+                    onClick={() => setMakeupType('out')}
+                    className={`py-3 rounded-xl font-bold transition-all ${makeupType === 'out' ? 'bg-[#ff9f28] text-white shadow-md' : 'bg-slate-100 text-slate-500'}`}
+                  >
+                    下班
+                  </button>
+                </div>
+              </div>
+              
+              {/* 原因 */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">申請原因</label>
+                <textarea 
+                  value={makeupReason}
+                  onChange={(e) => setMakeupReason(e.target.value)}
+                  placeholder="請簡述補打卡原因..."
+                  className="w-full p-3 bg-slate-50 border-none rounded-xl text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200 outline-none resize-none"
+                  rows={4}
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-3 mt-6">
+              <button 
+                onClick={() => { setShowMakeupForm(false); setMakeupDate(''); setMakeupReason(''); }}
+                className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+              >
+                取消
+              </button>
+              <button 
+                onClick={handleSubmitMakeup}
+                disabled={isSubmitting}
+                className="flex-1 py-3 bg-[#0bc6a8] text-white rounded-xl font-bold hover:bg-[#09b095] shadow-lg shadow-teal-200 transition-all disabled:opacity-50"
+              >
+                {isSubmitting ? <Loader2 className="animate-spin mx-auto" size={20} /> : "提交申請"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* === 請假申請表單（預留） === */}
+      {showLeaveForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in overflow-y-auto" onClick={() => setShowLeaveForm(false)}>
+          <div className="bg-white rounded-[2rem] w-full max-w-sm shadow-2xl p-6 my-8" onClick={e => e.stopPropagation()}>
+            <div className="text-center mb-6">
+              <div className="bg-purple-50 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-purple-500">
+                <Calendar size={28} />
+              </div>
+              <h3 className="font-black text-xl text-slate-800">請假申請</h3>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">起始日期</label>
+                  <input 
+                    type="date"
+                    value={leaveDateStart}
+                    onChange={(e) => setLeaveDateStart(e.target.value)}
+                    className="w-full p-3 bg-slate-50 border-none rounded-xl text-slate-800 font-bold focus:ring-2 focus:ring-purple-200 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">結束日期</label>
+                  <input 
+                    type="date"
+                    value={leaveDateEnd}
+                    onChange={(e) => setLeaveDateEnd(e.target.value)}
+                    className="w-full p-3 bg-slate-50 border-none rounded-xl text-slate-800 font-bold focus:ring-2 focus:ring-purple-200 outline-none"
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">請假天數</label>
+                  <input 
+                    type="number"
+                    min="0.5"
+                    step="0.5"
+                    value={leaveDays}
+                    onChange={(e) => setLeaveDays(parseFloat(e.target.value))}
+                    className="w-full p-3 bg-slate-50 border-none rounded-xl text-slate-800 font-bold focus:ring-2 focus:ring-purple-200 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">類型</label>
+                  <select 
+                    value={leaveHalfDay ? 'half' : 'full'}
+                    onChange={(e) => setLeaveHalfDay(e.target.value === 'half')}
+                    className="w-full p-3 bg-slate-50 border-none rounded-xl text-slate-800 font-bold focus:ring-2 focus:ring-purple-200 outline-none"
+                  >
+                    <option value="full">整天</option>
+                    <option value="half">半天</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">假別</label>
+                <select 
+                  value={leaveType}
+                  onChange={(e) => setLeaveType(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border-none rounded-xl text-slate-800 font-bold focus:ring-2 focus:ring-purple-200 outline-none"
+                >
+                  <option>事假</option>
+                  <option>病假</option>
+                  <option>特休</option>
+                  <option>婚假</option>
+                  <option>喪假</option>
+                  <option>產假</option>
+                  <option>陪產假</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">請假原因</label>
+                <textarea 
+                  value={leaveReason}
+                  onChange={(e) => setLeaveReason(e.target.value)}
+                  placeholder="請簡述請假原因..."
+                  className="w-full p-3 bg-slate-50 border-none rounded-xl text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-purple-200 outline-none resize-none"
+                  rows={4}
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-3 mt-6">
+              <button 
+                onClick={() => { setShowLeaveForm(false); }}
+                className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+              >
+                取消
+              </button>
+              <button 
+                onClick={handleSubmitLeave}
+                disabled={isSubmitting}
+                className="flex-1 py-3 bg-purple-500 text-white rounded-xl font-bold hover:bg-purple-600 shadow-lg shadow-purple-200 transition-all disabled:opacity-50"
+              >
+                {isSubmitting ? <Loader2 className="animate-spin mx-auto" size={20} /> : "提交申請"}
+              </button>
             </div>
           </div>
         </div>

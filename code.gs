@@ -10,6 +10,7 @@ const SHEET_LINE_IDS = "LINE_ID_收集區";
 const SHEET_CURRENT_MONTH = "打卡紀錄整理"; 
 const SHEET_ADMIN_LOGS = "管理員操作紀錄";
 const SHEET_SHIFTS = "班別設定";
+const SHEET_ID = "1AvIk0S6dDCFAplBvs_sSiYoCfOFHA8xvurBQnBxH_No";
 
 // ==========================================
 // 1. 路由處理區 (Router)
@@ -60,6 +61,12 @@ function doPost(e) {
   if (action === "adminGetStaffHistory") return responseJSON(handleAdminGetStaffHistory(postData.targetUid));
   if (action === "adminUpdateShift") return responseJSON(handleAdminUpdateShift(postData));
   if (action === "adminGetSheetList") return responseJSON(handleAdminGetSheetList());
+  
+// ========== 申請系統 API ==========
+if (action === "submitMakeupRequest") return responseJSON(handleSubmitMakeupRequest(payload));
+if (action === "submitLeaveRequest") return responseJSON(handleSubmitLeaveRequest(payload));
+if (action === "getPendingRequests") return responseJSON(handleGetPendingRequests(payload));
+if (action === "approveRequest") return responseJSON(handleApproveRequest(payload));
   if (action === "adminDownloadExcel") return responseJSON(handleAdminDownloadExcel(postData));
   return responseJSON({ success: false, message: "未知請求" });
 }
@@ -756,6 +763,9 @@ function handleAdminGetData(data) {
   const adminSheet = ss.getSheetByName(SHEET_ADMINS);
   const supSheet = ss.getSheetByName(SHEET_SUPERVISORS);
 
+  // [修正] 取得正確的識別名稱 (前端傳來的是 adminName，這裡原本只抓 name)
+  const checkName = data.adminName || data.name;
+
   // 1. 強制身分驗證
   let isAdmin = false;
   let isSupervisor = false;
@@ -765,7 +775,8 @@ function handleAdminGetData(data) {
   if (adminSheet) {
     const admins = adminSheet.getDataRange().getValues();
     for (let i = 1; i < admins.length; i++) {
-      if (admins[i][0] === data.name) { 
+      // [修正] 改用 checkName
+      if (admins[i][0] === checkName) { 
          isAdmin = true;
          break;
       }
@@ -780,7 +791,9 @@ function handleAdminGetData(data) {
           const sUid = String(supData[k][4] || "").trim(); // E欄 UID
           
           // 優先比對 UID，若無則比對 Name
-          const isMatch = (data.uid && data.uid === sUid) || (sName === data.name);
+          // [修正] 改用 checkName
+          const isMatch = (data.uid && data.uid === sUid) ||
+                          (sName === checkName);
           
           if (isMatch) {
               isSupervisor = true;
@@ -1747,4 +1760,319 @@ function findStaffIndexByUID(data, uid) {
     if (String(data[i][14]) === String(uid)) return i;
   }
   return -1;
+}
+
+// ==================== 申請系統功能 ====================
+
+/**
+ * 提交補打卡申請
+ */
+function handleSubmitMakeupRequest(data) {
+  try {
+    const { uid, name, date, type, reason } = data;
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    
+    // 1. 取得或建立「補打卡申請」工作表
+    let sheet = ss.getSheetByName("補打卡申請");
+    if (!sheet) {
+      sheet = ss.insertSheet("補打卡申請");
+      sheet.appendRow(["申請ID", "員工姓名", "UID", "分區", "補打卡日期", "類型", "預設時間", "申請原因", "申請時間", "狀態", "主管姓名", "核准原因", "核准時間", "最終時間"]);
+      sheet.getRange("A1:N1").setFontWeight("bold").setBackground("#4a90e2").setFontColor("white");
+    }
+    
+    // 2. 取得員工班別資訊
+    const staffSheet = ss.getSheetByName("人員資料");
+    const staffData = staffSheet.getDataRange().getValues();
+    const staffRow = staffData.find(row => row[1] === uid);
+    if (!staffRow) return { success: false, message: "找不到員工資料" };
+    
+    const region = staffRow[2]; // 分區
+    const shiftName = staffRow[7]; // 班別名稱
+    
+    // 3. 取得班別時間
+    const shiftSheet = ss.getSheetByName("班別設定");
+    const shiftData = shiftSheet.getDataRange().getValues();
+    const shiftRow = shiftData.find(row => row[0] === shiftName);
+    if (!shiftRow) return { success: false, message: "找不到班別資料" };
+    
+    const defaultTime = type === 'in' ? shiftRow[1] : shiftRow[2]; // 上班時間 or 下班時間
+    
+    // 4. 生成申請ID
+    const requestId = "MU-" + new Date().getTime();
+    const applyTime = Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd HH:mm:ss");
+    
+    // 5. 寫入申請記錄
+    sheet.appendRow([
+      requestId,
+      name,
+      uid,
+      region,
+      date,
+      type === 'in' ? '上班' : '下班',
+      defaultTime,
+      reason,
+      applyTime,
+      "待審",
+      "", // 主管姓名
+      "", // 核准原因
+      "", // 核准時間
+      ""  // 最終時間
+    ]);
+    
+    // 6. 發送 LINE 通知給該區主管
+    sendLineNotificationToSupervisors(region, `【補打卡申請】\n員工：${name}\n日期：${date}\n類型：${type === 'in' ? '上班' : '下班'}\n原因：${reason}`);
+    
+    return { success: true, message: "補打卡申請已提交" };
+  } catch (e) {
+    return { success: false, message: "提交失敗：" + e.toString() };
+  }
+}
+
+/**
+ * 提交請假申請
+ */
+function handleSubmitLeaveRequest(data) {
+  try {
+    const { uid, name, dateStart, dateEnd, days, halfDay, leaveType, reason } = data;
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    
+    // 1. 取得或建立「請假申請」工作表
+    let sheet = ss.getSheetByName("請假申請");
+    if (!sheet) {
+      sheet = ss.insertSheet("請假申請");
+      sheet.appendRow([
+        "申請ID", "員工姓名", "UID", "分區", "請假起始日", "請假結束日", "天數", "類型", "假別", "申請原因", "申請時間", "狀態",
+        "主管1", "核准原因1", "核准時間1",
+        "主管2", "核准原因2", "核准時間2",
+        "主管3", "核准原因3", "核准時間3",
+        "主管4", "核准原因4", "核准時間4",
+        "主管5", "核准原因5", "核准時間5"
+      ]);
+      sheet.getRange("A1:Z1").setFontWeight("bold").setBackground("#4a90e2").setFontColor("white");
+    }
+    
+    // 2. 取得員工分區
+    const staffSheet = ss.getSheetByName("人員資料");
+    const staffData = staffSheet.getDataRange().getValues();
+    const staffRow = staffData.find(row => row[1] === uid);
+    if (!staffRow) return { success: false, message: "找不到員工資料" };
+    
+    const region = staffRow[2];
+    
+    // 3. 生成申請ID
+    const requestId = "LV-" + new Date().getTime();
+    const applyTime = Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd HH:mm:ss");
+    
+    // 4. 寫入申請記錄
+    sheet.appendRow([
+      requestId, name, uid, region, dateStart, dateEnd, days, halfDay ? "半天" : "整天", leaveType, reason, applyTime, "待審",
+      "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""
+    ]);
+    
+    // 5. 發送 LINE 通知
+    sendLineNotificationToSupervisors(region, `【請假申請】\n員工：${name}\n日期：${dateStart} ~ ${dateEnd}\n天數：${days}天\n類型：${halfDay ? '半天' : '整天'}\n假別：${leaveType}`);
+    
+    return { success: true, message: "請假申請已提交（功能尚未開放審批）" };
+  } catch (e) {
+    return { success: false, message: "提交失敗：" + e.toString() };
+  }
+}
+
+/**
+ * 取得待審申請清單（依主管權限過濾）
+ */
+function handleGetPendingRequests(data) {
+  try {
+    const { supervisorName, regions } = data;
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const result = { makeup: [], leave: [] };
+    
+    // 1. 補打卡申請
+    const makeupSheet = ss.getSheetByName("補打卡申請");
+    if (makeupSheet) {
+      const makeupData = makeupSheet.getDataRange().getValues();
+      for (let i = 1; i < makeupData.length; i++) {
+        const row = makeupData[i];
+        if (row[9] === "待審" && regions.includes(row[3])) { // 狀態=待審 且 分區符合
+          result.makeup.push({
+            id: row[0],
+            name: row[1],
+            uid: row[2],
+            region: row[3],
+            date: row[4],
+            type: row[5],
+            defaultTime: row[6],
+            reason: row[7],
+            applyTime: row[8]
+          });
+        }
+      }
+    }
+    
+    // 2. 請假申請
+    const leaveSheet = ss.getSheetByName("請假申請");
+    if (leaveSheet) {
+      const leaveData = leaveSheet.getDataRange().getValues();
+      for (let i = 1; i < leaveData.length; i++) {
+        const row = leaveData[i];
+        if (row[11] === "待審" && regions.includes(row[3])) {
+          result.leave.push({
+            id: row[0],
+            name: row[1],
+            uid: row[2],
+            region: row[3],
+            dateStart: row[4],
+            dateEnd: row[5],
+            days: row[6],
+            dayType: row[7],
+            leaveType: row[8],
+            reason: row[9],
+            applyTime: row[10]
+          });
+        }
+      }
+    }
+    
+    return { success: true, data: result };
+  } catch (e) {
+    return { success: false, message: "取得失敗：" + e.toString() };
+  }
+}
+
+/**
+ * 審批申請（核准/駁回/微調時間）
+ */
+function handleApproveRequest(data) {
+  try {
+    const { requestId, type, action, supervisorName, approveReason, adjustedTime } = data;
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    
+    if (type === 'makeup') {
+      // === 補打卡審批 ===
+      const sheet = ss.getSheetByName("補打卡申請");
+      const sheetData = sheet.getDataRange().getValues();
+      
+      for (let i = 1; i < sheetData.length; i++) {
+        if (sheetData[i][0] === requestId) {
+          const status = action === 'approve' ? '已核准' : '已駁回';
+          const finalTime = adjustedTime || sheetData[i][6]; // 如果主管有微調時間，使用微調的
+          const approveTime = Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd HH:mm:ss");
+          
+          sheet.getRange(i + 1, 10).setValue(status); // 狀態
+          sheet.getRange(i + 1, 11).setValue(supervisorName); // 主管姓名
+          sheet.getRange(i + 1, 12).setValue(approveReason); // 核准原因
+          sheet.getRange(i + 1, 13).setValue(approveTime); // 核准時間
+          sheet.getRange(i + 1, 14).setValue(finalTime); // 最終時間
+          
+          // 如果核准，寫入正式打卡紀錄
+          if (action === 'approve') {
+            const recordSheet = ss.getSheetByName("打卡紀錄");
+            const clockDate = sheetData[i][4]; // 補打卡日期
+            const clockType = sheetData[i][5]; // 上班/下班
+            const fullDateTime = clockDate + " " + finalTime;
+            
+            recordSheet.appendRow([
+              sheetData[i][1], // 姓名
+              sheetData[i][2], // UID
+              fullDateTime,    // 打卡時間
+              "手動補登",      // 備註
+              clockType        // 類型
+            ]);
+          }
+          
+          return { success: true, message: action === 'approve' ? "已核准並記錄" : "已駁回申請" };
+        }
+      }
+    } else if (type === 'leave') {
+      // === 請假審批（目前僅更新狀態，不實際處理） ===
+      const sheet = ss.getSheetByName("請假申請");
+      const sheetData = sheet.getDataRange().getValues();
+      
+      for (let i = 1; i < sheetData.length; i++) {
+        if (sheetData[i][0] === requestId) {
+          const status = action === 'approve' ? '已核准' : '已駁回';
+          const approveTime = Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd HH:mm:ss");
+          
+          sheet.getRange(i + 1, 12).setValue(status); // 狀態
+          sheet.getRange(i + 1, 13).setValue(supervisorName); // 主管1
+          sheet.getRange(i + 1, 14).setValue(approveReason); // 核准原因1
+          sheet.getRange(i + 1, 15).setValue(approveTime); // 核准時間1
+          
+          return { success: true, message: "請假申請已更新（功能尚未完全開放）" };
+        }
+      }
+    }
+    
+    return { success: false, message: "找不到該申請記錄" };
+  } catch (e) {
+    return { success: false, message: "審批失敗：" + e.toString() };
+  }
+}
+
+/**
+ * 發送 LINE 通知給該區主管（使用 LINE Messaging API）
+ * 請先在 code.gs 最上方設定：
+ * const LINE_CHANNEL_ACCESS_TOKEN = "你的 Channel Access Token";
+ */
+function sendLineNotificationToSupervisors(region, message) {
+  try {
+    // ⚠️ 請在 code.gs 最上方加入這行：
+    // const LINE_CHANNEL_ACCESS_TOKEN = "你的 Channel Access Token";
+    
+    if (typeof LINE_CHANNEL_ACCESS_TOKEN === 'undefined') {
+      Logger.log("LINE_CHANNEL_ACCESS_TOKEN 未設定，略過通知");
+      return;
+    }
+    
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const staffSheet = ss.getSheetByName("人員資料");
+    const staffData = staffSheet.getDataRange().getValues();
+    
+    // 找出該區所有主管
+    const supervisors = staffData.filter(row => {
+      const regions = row[6] ? row[6].toString().split(',') : [];
+      return row[5] === true && regions.includes(region); // 是主管 且 有該區權限
+    });
+    
+    // 發送 LINE 通知
+    supervisors.forEach(supervisor => {
+      const lineUserId = supervisor[4]; // LINE User ID 欄位
+      if (lineUserId) {
+        sendLinePushMessage(lineUserId, message);
+      }
+    });
+  } catch (e) {
+    Logger.log("LINE 通知失敗：" + e.toString());
+  }
+}
+
+/**
+ * 實際發送 LINE Push Message
+ */
+function sendLinePushMessage(userId, message) {
+  try {
+    if (typeof LINE_CHANNEL_ACCESS_TOKEN === 'undefined') return;
+    
+    const url = "https://api.line.me/v2/bot/message/push";
+    const payload = {
+      to: userId,
+      messages: [{
+        type: "text",
+        text: message
+      }]
+    };
+    
+    const options = {
+      method: "post",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + LINE_CHANNEL_ACCESS_TOKEN
+      },
+      payload: JSON.stringify(payload)
+    };
+    
+    UrlFetchApp.fetch(url, options);
+  } catch (e) {
+    Logger.log("LINE 推送失敗：" + e.toString());
+  }
 }

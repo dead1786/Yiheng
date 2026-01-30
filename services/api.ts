@@ -54,4 +54,17 @@ export const api = {
   adminDownloadExcel: (adminName: string, sheetName?: string) => post("adminDownloadExcel", { adminName, sheetName }),
 
   adminGetSheetList: () => post("adminGetSheetList"),
+
+  // 申請系統 API
+  submitMakeupRequest: (data: { uid: string, name: string, date: string, type: 'in' | 'out', reason: string }) => 
+    post("submitMakeupRequest", data),
+  
+  submitLeaveRequest: (data: { uid: string, name: string, dateStart: string, dateEnd: string, days: number, halfDay: boolean, leaveType: string, reason: string }) => 
+    post("submitLeaveRequest", data),
+  
+  getPendingRequests: (supervisorName: string, regions: string[]) => 
+    post("getPendingRequests", { supervisorName, regions }),
+  
+  approveRequest: (data: { requestId: string, type: 'makeup' | 'leave', action: 'approve' | 'reject', supervisorName: string, approveReason: string, adjustedTime?: string }) => 
+    post("approveRequest", data),
 };
