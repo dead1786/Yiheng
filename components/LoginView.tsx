@@ -210,10 +210,7 @@ export const LoginView = ({ onLogin }: Props) => {
       
       {/* Logo Area */}
       <div className="flex flex-col items-center mb-8 z-10 animate-in fade-in slide-in-from-top-4 duration-700">
-        <h1 
-          onClick={() => window.location.href = '/?dark-preview=true'}
-          className="text-white text-3xl font-bold tracking-wider mb-1 shadow-black/5 drop-shadow-sm cursor-pointer active:scale-95 transition-transform"
-        >
+        <h1 className="text-white text-3xl font-bold tracking-wider mb-1 shadow-black/5 drop-shadow-sm">
           益恆科技
         </h1>
         <p className="text-white/80 text-base font-medium tracking-widest">線上打卡</p>
