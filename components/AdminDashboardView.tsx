@@ -1192,8 +1192,8 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                                   <h4 className="font-bold text-white">{req.name}</h4>
                                   <p className="text-xs text-slate-400">UID: {req.uid} | {req.region}</p>
                                 </div>
-                                <span className={`px-2 py-1 rounded-lg text-xs font-bold ${req.type === 'in' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'}`}>
-                                  {req.type === 'in' ? '上班' : '下班'}
+                                <span className={`px-2 py-1 rounded-lg text-xs font-bold ${req.type === '上班' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'}`}>
+                                 {req.type}
                                 </span>
                               </div>
                               
@@ -1568,8 +1568,8 @@ export const AdminDashboardView = ({ onBack, onAlert, onConfirm, user }: Props) 
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">類型</span>
-                    <span className={`font-bold ${approvingRequest.type === 'in' ? 'text-blue-400' : 'text-orange-400'}`}>
-                      {approvingRequest.type === 'in' ? '上班' : '下班'}
+                    <span className={`font-bold ${approvingRequest.type === '上班' ? 'text-blue-400' : 'text-orange-400'}`}>
+                    {approvingRequest.type}
                     </span>
                   </div>
                   <div className="flex justify-between">
