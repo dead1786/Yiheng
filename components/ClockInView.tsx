@@ -528,7 +528,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
         {/* 2. Three Status Cards */}
         <div className="grid grid-cols-3 gap-4">
           {/* GPS Card */}
-          <div className="bg-white dark:bg-slate-800 dark:bg-slate-800 dark:bg-slate-800 p-4 rounded-[1.5rem] shadow-sm flex flex-col items-center justify-center gap-2 min-h-[110px]">
+          <div className="bg-white dark:bg-slate-800 dark:bg-slate-800 p-4 rounded-[1.5rem] shadow-sm flex flex-col items-center justify-center gap-2 min-h-[110px]">
             <div className="bg-[#e0fbf6] p-2 rounded-full mb-1">
                <MapPin className="text-[#0bc6a8]" size={20} />
             </div>
@@ -539,7 +539,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
           </div>
           
           {/* IP Card */}
-          <div className="bg-white dark:bg-slate-800 dark:bg-slate-800 p-4 rounded-[1.5rem] shadow-sm flex flex-col items-center justify-center gap-2 min-h-[110px]">
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-[1.5rem] shadow-sm flex flex-col items-center justify-center gap-2 min-h-[110px]">
             <div className="bg-[#e0fbf6] p-2 rounded-full mb-1">
                <Wifi className="text-[#0bc6a8]" size={20} />
             </div>
@@ -550,7 +550,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
           </div>
           
           {/* Remote Card */}
-          <div className="bg-white dark:bg-slate-800 dark:bg-slate-800 p-4 rounded-[1.5rem] shadow-sm flex flex-col items-center justify-center gap-2 min-h-[110px]">
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-[1.5rem] shadow-sm flex flex-col items-center justify-center gap-2 min-h-[110px]">
             <div className="bg-[#e0fbf6] p-2 rounded-full mb-1">
                <Cloud className="text-[#0bc6a8]" size={20} />
             </div>
@@ -562,7 +562,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
         </div>
 
         {/* 3. Map Section */}
-        <div className="bg-white dark:bg-slate-800 dark:bg-slate-800 p-3 rounded-[2rem] shadow-sm">
+        <div className="bg-white dark:bg-slate-800 p-3 rounded-[2rem] shadow-sm">
           <div className="relative w-full aspect-[16/9] rounded-[1.5rem] overflow-hidden bg-slate-100">
              {/* Google Maps Iframe */}
              {coords ? (
@@ -718,10 +718,10 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
       {/* Modal 部分保持原本功能 */}
       {showHistory && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in" onClick={() => setShowHistory(false)}>
-          <div className="bg-white dark:bg-slate-800 dark:bg-slate-800 rounded-[2rem] w-full max-w-md h-[70vh] flex flex-col shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="p-5 border-b flex justify-between items-center bg-slate-50">
-                <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 dark:text-slate-100">打卡紀錄</h3>
-                <button onClick={() => setShowHistory(false)} className="bg-slate-200 p-2 rounded-full hover:bg-slate-300"><X size={16}/></button>
+          <div className="bg-white dark:bg-slate-800 rounded-[2rem] w-full max-w-md h-[70vh] flex flex-col shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-5 border-b flex justify-between items-center bg-slate-50 dark:bg-slate-700">
+                <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100">打卡紀錄</h3>
+                <button onClick={() => setShowHistory(false)} className="bg-slate-200 dark:bg-slate-700 p-2 rounded-full hover:bg-slate-300"><X size={16}/></button>
             </div>
             <div className="flex p-3 gap-2 bg-white">
               <button onClick={() => setHistoryTab('current')} className={`flex-1 py-2 rounded-xl text-sm font-bold transition ${historyTab === 'current' ? 'bg-[#0bc6a8] text-white shadow-md' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}`}>本月</button>
@@ -737,7 +737,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
                             <th className="px-2 py-3">備註</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                         {loadingHistory && !historyData ? (<tr><td colSpan={5} className="text-center py-10 text-slate-400"><Loader2 className="animate-spin inline mr-2"/>讀取中...</td></tr>) : renderHistoryRows()}
                     </tbody>
                 </table>
@@ -748,10 +748,10 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
 
       {showChangePwd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in" onClick={() => setShowChangePwd(false)}>
-          <div className="bg-white dark:bg-slate-800 dark:bg-slate-800 rounded-[2rem] w-full max-w-xs shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-800 rounded-[2rem] w-full max-w-xs shadow-2xl p-6" onClick={e => e.stopPropagation()}>
             <div className="text-center mb-6">
               <div className="bg-blue-50 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-blue-500"><KeyRound size={28} /></div>
-              <h3 className="font-black text-xl text-slate-800 dark:text-slate-100 dark:text-slate-100">修改密碼</h3>
+              <h3 className="font-black text-xl text-slate-800 dark:text-slate-100">修改密碼</h3>
             </div>
             <div className="space-y-4">
               <div><input type="password" value={pwdForm.old} onChange={e=>setPwdForm({...pwdForm, old: e.target.value})} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border-none rounded-xl text-slate-800 dark:text-slate-100 font-bold placeholder:font-normal placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200 outline-none" placeholder="目前密碼" /></div>
@@ -769,12 +769,12 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
       {/* === 申請選單彈窗 === */}
       {showRequestMenu && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in" onClick={() => setShowRequestMenu(false)}>
-          <div className="bg-white dark:bg-slate-800 dark:bg-slate-800 rounded-[2rem] w-full max-w-xs shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-800 rounded-[2rem] w-full max-w-xs shadow-2xl p-6" onClick={e => e.stopPropagation()}>
             <div className="text-center mb-6">
-              <div className="bg-slate-50 dark:bg-slate-700 dark:bg-slate-700 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-[#0bc6a8]">
+              <div className="bg-slate-50 dark:bg-slate-700 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-[#0bc6a8]">
                 <FileText size={28} />
               </div>
-              <h3 className="font-black text-xl text-slate-800 dark:text-slate-100 dark:text-slate-100">選擇申請類型</h3>
+              <h3 className="font-black text-xl text-slate-800 dark:text-slate-100">選擇申請類型</h3>
             </div>
             
             <div className="space-y-3">
@@ -788,7 +788,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
               
               <button 
                 disabled
-                className="w-full bg-slate-200 text-slate-400 py-4 rounded-xl font-bold text-base cursor-not-allowed flex items-center justify-center gap-2 opacity-50"
+                className="w-full bg-slate-200 dark:bg-slate-700 text-slate-400 py-4 rounded-xl font-bold text-base cursor-not-allowed flex items-center justify-center gap-2 opacity-50"
               >
                 <Calendar size={20} />
                 請假申請（尚未開放）
@@ -797,7 +797,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
             
             <button 
               onClick={() => setShowRequestMenu(false)}
-              className="w-full mt-4 py-3 text-slate-500 dark:text-slate-400 font-bold hover:text-slate-700 dark:text-slate-200 transition-colors"
+              className="w-full mt-4 py-3 text-slate-500 dark:text-slate-300 font-bold hover:text-slate-700 dark:text-slate-200 transition-colors"
             >
               取消
             </button>
@@ -808,12 +808,12 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
       {/* === 補打卡申請表單 === */}
       {showMakeupForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in overflow-y-auto" onClick={() => setShowMakeupForm(false)}>
-          <div className="bg-white dark:bg-slate-800 dark:bg-slate-800 rounded-[2rem] w-full max-w-sm shadow-2xl p-6 my-8" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-800 rounded-[2rem] w-full max-w-sm shadow-2xl p-6 my-8" onClick={e => e.stopPropagation()}>
             <div className="text-center mb-6">
               <div className="bg-blue-50 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-blue-500">
                 <FilePlus size={28} />
               </div>
-              <h3 className="font-black text-xl text-slate-800 dark:text-slate-100 dark:text-slate-100">補打卡申請</h3>
+              <h3 className="font-black text-xl text-slate-800 dark:text-slate-100">補打卡申請</h3>
             </div>
             
             <div className="space-y-4">
@@ -863,7 +863,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
             <div className="flex gap-3 mt-6">
               <button 
                 onClick={() => { setShowMakeupForm(false); setMakeupDate(''); setMakeupReason(''); }}
-                className="flex-1 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+                className="flex-1 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-xl font-bold hover:bg-slate-200 dark:bg-slate-700 transition-colors"
               >
                 取消
               </button>
@@ -882,12 +882,12 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
       {/* === 請假申請表單（預留） === */}
       {showLeaveForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in overflow-y-auto" onClick={() => setShowLeaveForm(false)}>
-          <div className="bg-white dark:bg-slate-800 dark:bg-slate-800 rounded-[2rem] w-full max-w-sm shadow-2xl p-6 my-8" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-800 rounded-[2rem] w-full max-w-sm shadow-2xl p-6 my-8" onClick={e => e.stopPropagation()}>
             <div className="text-center mb-6">
               <div className="bg-purple-50 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-purple-500">
                 <Calendar size={28} />
               </div>
-              <h3 className="font-black text-xl text-slate-800 dark:text-slate-100 dark:text-slate-100">請假申請</h3>
+              <h3 className="font-black text-xl text-slate-800 dark:text-slate-100">請假申請</h3>
             </div>
             
             <div className="space-y-4">
@@ -969,7 +969,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
             <div className="flex gap-3 mt-6">
               <button 
                 onClick={() => { setShowLeaveForm(false); }}
-                className="flex-1 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+                className="flex-1 py-3 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-xl font-bold hover:bg-slate-200 dark:bg-slate-700 transition-colors"
               >
                 取消
               </button>
@@ -988,12 +988,12 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
       {/* === 統計 Modal === */}
       {showStatsModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in" onClick={() => setShowStatsModal(false)}>
-          <div className="bg-white dark:bg-slate-800 dark:bg-slate-800 rounded-[2rem] w-full max-w-sm shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-800 rounded-[2rem] w-full max-w-sm shadow-2xl p-6" onClick={e => e.stopPropagation()}>
             <div className="text-center mb-6">
               <div className="bg-[#0bc6a8]/10 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-[#0bc6a8]">
                 <BarChart3 size={28} />
               </div>
-              <h3 className="font-black text-xl text-slate-800 dark:text-slate-100 dark:text-slate-100">當月統計</h3>
+              <h3 className="font-black text-xl text-slate-800 dark:text-slate-100">當月統計</h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{user.name} 的出勤統計</p>
             </div>
 
@@ -1005,15 +1005,15 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
             ) : monthlyStats ? (
               <div className="space-y-4">
                 {/* 統計月份 */}
-                <div className="bg-slate-50 dark:bg-slate-700 dark:bg-slate-700 rounded-xl p-4">
+                <div className="bg-slate-50 dark:bg-slate-700 rounded-xl p-4">
                   <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">統計月份</div>
-                  <div className="text-2xl font-black text-slate-800 dark:text-slate-100 dark:text-slate-100">{monthlyStats.month}</div>
+                  <div className="text-2xl font-black text-slate-800 dark:text-slate-100">{monthlyStats.month}</div>
                 </div>
 
                 {/* 統計數據 */}
                 <div className="space-y-3">
                   {/* 總工時 */}
-                  <div className="bg-slate-50 dark:bg-slate-700 dark:bg-slate-700 rounded-xl p-4 flex items-center justify-between">
+                  <div className="bg-slate-50 dark:bg-slate-700 rounded-xl p-4 flex items-center justify-between">
                     <div>
                       <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">總工時</div>
                       <div className="text-sm text-slate-400 mt-0.5">本月累計</div>
@@ -1022,7 +1022,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
                   </div>
 
                   {/* 遲到次數 */}
-                  <div className="bg-slate-50 dark:bg-slate-700 dark:bg-slate-700 rounded-xl p-4 flex items-center justify-between">
+                  <div className="bg-slate-50 dark:bg-slate-700 rounded-xl p-4 flex items-center justify-between">
                     <div>
                       <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">遲到次數</div>
                       <div className="text-sm text-slate-400 mt-0.5">本月累計</div>
@@ -1031,7 +1031,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
                   </div>
 
                   {/* 早退次數 */}
-                  <div className="bg-slate-50 dark:bg-slate-700 dark:bg-slate-700 rounded-xl p-4 flex items-center justify-between">
+                  <div className="bg-slate-50 dark:bg-slate-700 rounded-xl p-4 flex items-center justify-between">
                     <div>
                       <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">早退次數</div>
                       <div className="text-sm text-slate-400 mt-0.5">本月累計</div>
@@ -1087,7 +1087,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
                     </div>
                   </div>
                 </div>
-                <div className={`px-3 py-1 rounded-full text-xs font-bold ${isDark ? 'bg-[#0bc6a8] text-white' : 'bg-slate-200 text-slate-600 dark:text-slate-300'}`}>
+                <div className={`px-3 py-1 rounded-full text-xs font-bold ${isDark ? 'bg-[#0bc6a8] text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
                   {isDark ? 'ON' : 'OFF'}
                 </div>
               </button>
@@ -1113,7 +1113,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
 
             <button 
               onClick={() => setShowSettingsModal(false)}
-              className="w-full mt-6 py-3 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+              className="w-full mt-6 py-3 bg-slate-200 dark:bg-slate-700 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
             >
               關閉
             </button>
