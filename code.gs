@@ -61,12 +61,11 @@ function doPost(e) {
   if (action === "adminUpdateSupervisor") return responseJSON(handleAdminUpdateSupervisor(postData)); 
   if (action === "adminUnlockStaff") return responseJSON(handleAdminUnlockStaff(postData));
   if (action === "adminGetDailyRecords") return responseJSON(handleAdminGetDailyRecords(postData.date));
-  // [修正] 改傳 targetUid 給函式
   if (action === "adminGetStaffHistory") return responseJSON(handleAdminGetStaffHistory(postData.targetUid));
   if (action === "adminUpdateShift") return responseJSON(handleAdminUpdateShift(postData));
   if (action === "adminGetSheetList") return responseJSON(handleAdminGetSheetList());
-  if (action === "getMonthlyStats") return responseJSON(handleGetMonthlyStats(postData));
   if (action === "adminGetAllStaff") return responseJSON(handleAdminGetAllStaff(postData));
+  if (action === "logForceLogin") return responseJSON(handleLogForceLogin(postData));
   
 // ========== 申請系統 API ==========
   if (action === "submitMakeupRequest") return responseJSON(handleSubmitMakeupRequest(postData));
@@ -260,15 +259,32 @@ function checkSessionValid(uid, clientLoginTime) {
 function handleAdminGetSheetList() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const allSheets = ss.getSheets();
-  const systemSheets = [SHEET_STAFF, SHEET_ADMINS, SHEET_LOCATIONS, SHEET_RECORDS, SHEET_LINE_IDS, SHEET_ADMIN_LOGS, SHEET_SHIFTS, "line bot設定", "北區維運班表", "國定假日", "待處理","當日出勤","當月統計","主管名單","補打卡申請"];
+  
+  // 1. 定義允許的格式：4位數字/1-2位數字 (例如 2026/1, 2025/12)
+  const datePattern = /^\d{4}\/\d{1,2}$/;
+  
+  // 2. 指定必須保留的核心工作表名稱
+  const TARGET_MAIN_SHEET = "打卡紀錄整理"; // 或是使用變數 SHEET_CURRENT_MONTH
+  
   let list = [];
-  list.push({ name: SHEET_CURRENT_MONTH, label: `${SHEET_CURRENT_MONTH} (當前)` });
+
   allSheets.forEach(sheet => {
     const name = sheet.getName();
-    if (!systemSheets.includes(name) && name !== SHEET_CURRENT_MONTH) {
-      list.push({ name: name, label: name });
+    
+    // 邏輯判斷：如果是「目標主表」 或 「符合日期格式」 -> 則加入清單
+    if (name === TARGET_MAIN_SHEET || datePattern.test(name)) {
+      
+      // 特別標記：如果是主表，加上 (當前) 的標籤
+      let labelName = name;
+      if (name === TARGET_MAIN_SHEET) {
+        labelName = `${name} (當前)`;
+      }
+      
+      list.push({ name: name, label: labelName });
     }
   });
+
+  // (選用) 如果希望列表按照日期排序，可以在這裡加 sort，不然預設是依照工作表順序
   return { success: true, list: list };
 }
 
@@ -1335,8 +1351,8 @@ function fetchUserData(ss, sheetName, targetName, uid) {
   const cleanTarget = String(targetName).trim();
   let result = null;
 
-  // [新增] 針對「打卡紀錄整理」且有 UID 時，優先搜尋 "姓名+UID"
-  if (sheetName === "打卡紀錄整理" && uid) {
+  // [修改] 只要有傳 UID，就優先搜尋 "姓名+UID" (不限工作表)
+  if (uid) {
      const comboName = cleanTarget + uid;
      const comboFinder = sheet.getRange("E:AR").createTextFinder(comboName).matchEntireCell(true);
      result = comboFinder.findNext();
@@ -1346,8 +1362,8 @@ function fetchUserData(ss, sheetName, targetName, uid) {
   if (!result) {
      let finder = sheet.getRange("E:AR").createTextFinder(cleanTarget).matchEntireCell(true);
      result = finder.findNext();
-     
-     // 二次 Fallback: 模糊搜尋
+
+     // 二次 Fallback: 模糊搜尋 (僅在當月)
      if (!result && sheetName === "打卡紀錄整理") {
         finder = sheet.getRange("E:AR").createTextFinder(cleanTarget).matchEntireCell(false);
         result = finder.findNext();
@@ -2078,6 +2094,11 @@ function handleApproveRequest(data) {
             ]);
           }
           
+          // [新增] 記錄管理員操作
+          const actionText = action === 'approve' ? '核准補打卡' : '駁回補打卡';
+          const logDetail = `${actionText} - 員工:${sheetData[i][1]} / 日期:${sheetData[i][4]} / 類型:${sheetData[i][5]} / 原因:${approveReason}`;
+          logAdminAction(supervisorName, actionText, logDetail);
+          
           return { success: true, message: action === 'approve' ? "已核准並記錄" : "已駁回申請" };
         }
       }
@@ -2095,6 +2116,11 @@ function handleApproveRequest(data) {
           sheet.getRange(i + 1, 13).setValue(supervisorName); // 主管1
           sheet.getRange(i + 1, 14).setValue(approveReason); // 核准原因1
           sheet.getRange(i + 1, 15).setValue(approveTime); // 核准時間1
+          
+          // [新增] 記錄管理員操作
+          const actionText = action === 'approve' ? '核准請假' : '駁回請假';
+          const logDetail = `${actionText} - 員工:${sheetData[i][1]} / 日期:${sheetData[i][4]}~${sheetData[i][5]} / 原因:${approveReason}`;
+          logAdminAction(supervisorName, actionText, logDetail);
           
           return { success: true, message: "請假申請已更新（功能尚未完全開放）" };
         }
@@ -2295,5 +2321,54 @@ function handleAdminGetAllStaff(data) {
     return { success: true, list };
   } catch (e) {
     return { success: false, message: "取得員工清單失敗：" + e.toString() };
+  }
+}
+
+/**
+ * 管理員取得所有員工清單（用於強制登入）
+ */
+function handleAdminGetAllStaff(data) {
+  try {
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const staffSheet = ss.getSheetByName(SHEET_STAFF);
+    const staffData = staffSheet.getDataRange().getValues();
+    
+    const list = [];
+    for (let i = 1; i < staffData.length; i++) {
+      const row = staffData[i];
+      list.push({
+        name: row[0],
+        uid: row[14],
+        region: row[13],
+        allowRemote: row[10] === 'TRUE',
+        isAdmin: row[12] === 'TRUE',
+        isSupervisor: row[15] === 'TRUE',
+        regions: row[16] ? row[16].split(',').map(function(r) { return r.trim(); }) : [],
+        shift: row[11]
+      });
+    }
+    
+    // [新增] 記錄管理員操作
+    logAdminAction("系統管理員", "查詢員工清單", "準備進行強制登入");
+    
+    return { success: true, list: list };
+  } catch (e) {
+    return { success: false, message: "取得員工清單失敗：" + e.toString() };
+  }
+}
+
+/**
+ * 記錄管理員強制登入操作
+ */
+function handleLogForceLogin(data) {
+  try {
+    const targetName = data.targetName;
+    const targetUid = data.targetUid;
+    const adminName = data.adminName;
+    const logDetail = "強制登入為 " + targetName + " (UID: " + targetUid + ")";
+    logAdminAction(adminName || "系統管理員", "強制登入", logDetail);
+    return { success: true };
+  } catch (e) {
+    return { success: false, message: e.toString() };
   }
 }

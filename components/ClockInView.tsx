@@ -57,12 +57,15 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
   const [status, setStatus] = useState('定位中...');
   // [新增] IP 狀態
   const [clientIp, setClientIp] = useState('');
-  
+
   const [currentDist, setCurrentDist] = useState<number | null>(null);
   // [新增] 按鈕鎖定狀態 (20小時)
   const [lockState, setLockState] = useState<{ in: number; out: number }>({ in: 0, out: 0 });
-  
+
   const [isClockingIn, setIsClockingIn] = useState(false);
+
+  // [新增] 地圖摺疊狀態：0=收起, 1=顯示地圖, 2=開啟地圖app
+  const [mapState, setMapState] = useState(0);
 
   // [新增] 讀取本地鎖定狀態
   useEffect(() => {
@@ -243,14 +246,23 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
 
   // [修正] 增加安全檢查，確保 ip 欄位存在且為字串才執行 includes，避免畫面變白
   const currentLocData = locations.find(l => l.name === selectedLoc);
-  const isIpMatch = !!(currentLocData && 
-                       typeof currentLocData.ip === 'string' && 
-                       currentLocData.ip.trim() !== '' && 
-                       clientIp && 
+  const isIpMatch = !!(currentLocData &&
+                       typeof currentLocData.ip === 'string' &&
+                       currentLocData.ip.trim() !== '' &&
+                       clientIp &&
                        currentLocData.ip.includes(clientIp));
 
   // [修改] 允許條件：GPS定位成功 OR 遠端權限 OR (有IP且IP符合該地點設定)
   const canSubmit = coords || user.allowRemote || isIpMatch;
+
+  // [新增] 處理地圖狀態 2：開啟地圖 app
+  useEffect(() => {
+    if (mapState === 2 && coords) {
+      const url = `https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lng}`;
+      window.open(url, '_blank');
+      setMapState(0); // 開啟後重置為收起狀態
+    }
+  }, [mapState, coords]);
   const formatTime = (ts: number) => {
       if (!ts) return "";
       return new Date(ts).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -557,77 +569,114 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
           </div>
         </div>
 
-        {/* 3. Map Section */}
-        <div className="bg-white p-3 rounded-[2rem] shadow-sm">
-          <div className="relative w-full aspect-[16/9] rounded-[1.5rem] overflow-hidden bg-slate-100">
-             {/* Google Maps Iframe */}
-             {coords ? (
-                <iframe 
-                  width="100%" 
-                  height="100%" 
-                  frameBorder="0" 
-                  scrolling="no" 
-                  src={`https://maps.google.com/maps?q=${coords.lat},${coords.lng}&z=16&output=embed`}
-                  className="w-full h-full opacity-90 grayscale-[0.2]"
-                ></iframe>
-             ) : (
-                <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                  <Loader2 className="animate-spin mb-2 text-[#0bc6a8]" />
-                  <span className="text-xs font-bold">衛星定位中...</span>
+        {/* 3. Map Section - 三階段顯示 */}
+        <div className="bg-white rounded-[2rem] shadow-sm overflow-hidden">
+          {/* 狀態 0: 收起 - 只顯示長條資訊 */}
+          {mapState === 0 && (
+            <div
+              onClick={() => setMapState(1)}
+              className="p-4 cursor-pointer hover:bg-slate-50 active:bg-slate-100 transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 flex-1">
+                  <div className="bg-[#e0fbf6] p-2.5 rounded-full">
+                    <MapPin className="text-[#0bc6a8]" size={20} />
+                  </div>
+                  <div className="flex-1">
+                    <select
+                      value={selectedLoc}
+                      onChange={e => { e.stopPropagation(); setSelectedLoc(e.target.value); }}
+                      onClick={e => e.stopPropagation()}
+                      className="text-sm font-black text-slate-800 bg-transparent border-none outline-none p-0 cursor-pointer w-full"
+                    >
+                      {locations.map(loc => <option key={loc.name} value={loc.name}>{loc.name}</option>)}
+                    </select>
+                    <span className="text-xs text-slate-600 font-bold block mt-0.5">
+                      距離：{currentDist !== null ? `${currentDist} 公尺` : '計算中...'}
+                    </span>
+                  </div>
                 </div>
-             )}
-             
-             {/* Center Marker Overlay (Visual only) */}
-             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -mt-4 pointer-events-none">
-                 <div className="relative">
+
+                <div className="flex flex-col items-end gap-1">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    currentDist !== null && currentDist < (locations.find(l=>l.name===selectedLoc)?.radius || 500)
+                    ? 'bg-[#dcfce7] text-[#0bc6a8]'
+                    : 'bg-red-50 text-red-500'
+                  }`}>
+                    {currentDist !== null && currentDist < (locations.find(l=>l.name===selectedLoc)?.radius || 500) ? 'GPS 範圍內' : 'GPS 範圍外'}
+                  </span>
+
+                  {locations.find(l=>l.name===selectedLoc)?.ip ? (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      isIpMatch ? 'bg-blue-50 text-blue-500' : 'bg-orange-50 text-orange-500'
+                    }`}>
+                      {isIpMatch ? 'IP 符合' : 'IP 不符'}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-slate-300 font-bold px-1">無 IP 限制</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 狀態 1: 展開 - 顯示地圖 */}
+          {mapState === 1 && (
+            <div className="p-3">
+              <div
+                onClick={() => setMapState(2)}
+                className="relative w-full aspect-[16/9] rounded-[1.5rem] overflow-hidden bg-slate-100 cursor-pointer"
+              >
+                {coords ? (
+                  <iframe
+                    width="100%"
+                    height="100%"
+                    frameBorder="0"
+                    scrolling="no"
+                    src={`https://maps.google.com/maps?q=${coords.lat},${coords.lng}&z=16&output=embed`}
+                    className="w-full h-full opacity-90 grayscale-[0.2] pointer-events-none"
+                  ></iframe>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                    <Loader2 className="animate-spin mb-2 text-[#0bc6a8]" />
+                    <span className="text-xs font-bold">衛星定位中...</span>
+                  </div>
+                )}
+
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -mt-4 pointer-events-none">
+                  <div className="relative">
                     <span className="absolute w-4 h-4 bg-[#0bc6a8] rounded-full animate-ping opacity-75"></span>
                     <MapPin className="text-[#0bc6a8] fill-white relative z-10 drop-shadow-lg" size={40} />
-                 </div>
-             </div>
-          </div>
-
-          {/* Map Footer Info */}
-          <div className="flex items-center justify-between px-3 py-3">
-             <div className="flex items-center gap-2">
-                <span className={`w-2.5 h-2.5 rounded-full ${currentDist !== null && currentDist < (locations.find(l=>l.name===selectedLoc)?.radius || 500) ? 'bg-[#0bc6a8]' : 'bg-orange-500'}`}></span>
-                <div className="flex flex-col">
-                   {/* Location Selector (Hidden styling) */}
-                   <select 
-                      value={selectedLoc} 
-                      onChange={e => setSelectedLoc(e.target.value)} 
-                      className="text-sm font-black text-slate-800 bg-transparent border-none outline-none p-0 cursor-pointer"
-                   >
-                      {locations.map(loc => <option key={loc.name} value={loc.name}>{loc.name}</option>)}
-                   </select>
-                   <span className="text-[10px] text-slate-400 font-bold">
-                     距離公司範圍：{currentDist !== null ? `${currentDist} 公尺` : '計算中'}
-                   </span>
+                  </div>
                 </div>
-             </div>
-             
-             {/* [修改] 右側狀態區：垂直排列 GPS 與 IP 狀態 */}
-             <div className="flex flex-col items-end gap-1">
-                 {/* GPS 狀態 */}
-                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    currentDist !== null && currentDist < (locations.find(l=>l.name===selectedLoc)?.radius || 500)
-                    ? 'bg-[#dcfce7] text-[#0bc6a8]' 
-                    : 'bg-red-50 text-red-500'
-                 }`}>
-                    {currentDist !== null && currentDist < (locations.find(l=>l.name===selectedLoc)?.radius || 500) ? 'GPS 範圍內' : 'GPS 範圍外'}
-                 </span>
-                 
-                 {/* [新增] IP 狀態 */}
-                 {locations.find(l=>l.name===selectedLoc)?.ip ? (
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        isIpMatch ? 'bg-blue-50 text-blue-500' : 'bg-orange-50 text-orange-500'
-                    }`}>
-                        {isIpMatch ? 'IP 符合' : 'IP 不符'}
+              </div>
+
+              <div className="flex items-center justify-between px-3 py-3">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2.5 h-2.5 rounded-full ${currentDist !== null && currentDist < (locations.find(l=>l.name===selectedLoc)?.radius || 500) ? 'bg-[#0bc6a8]' : 'bg-orange-500'}`}></span>
+                  <div className="flex flex-col">
+                    <select
+                      value={selectedLoc}
+                      onChange={e => setSelectedLoc(e.target.value)}
+                      className="text-sm font-black text-slate-800 bg-transparent border-none outline-none p-0 cursor-pointer"
+                    >
+                      {locations.map(loc => <option key={loc.name} value={loc.name}>{loc.name}</option>)}
+                    </select>
+                    <span className="text-xs text-slate-600 font-bold">
+                      距離：{currentDist !== null ? `${currentDist} 公尺` : '計算中'}
                     </span>
-                 ) : (
-                    <span className="text-[10px] text-slate-300 font-bold px-1">無 IP 限制</span>
-                 )}
-             </div>
-          </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={(e) => { e.stopPropagation(); setMapState(0); }}
+                  className="text-slate-400 hover:text-slate-600 p-1"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
 
