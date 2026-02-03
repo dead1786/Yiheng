@@ -2231,25 +2231,28 @@ function sendLinePushMessage(userId, message) {
 }
 
 /**
- * 取得員工當月統計數據
+ * 取得員工統計數據（本月/上月）
  */
 function handleGetMonthlyStats(data) {
   try {
-    const { uid, name } = data;
+    const { uid, name, monthOffset = 0 } = data;
     const ss = SpreadsheetApp.openById(SHEET_ID);
-    const statsSheet = ss.getSheetByName("當月統計");
-    
+
+    // 根據 monthOffset 選擇工作表：0=本月，-1=上月
+    const sheetName = monthOffset === -1 ? "上月統計" : "當月統計";
+    const statsSheet = ss.getSheetByName(sheetName);
+
     if (!statsSheet) {
-      return { success: false, message: "找不到統計工作表" };
+      return { success: false, message: `找不到統計工作表：${sheetName}` };
     }
-    
+
     const statsData = statsSheet.getDataRange().getValues();
-    
+
     // 從第 2 行開始搜尋（第 1 行是標題）
     for (let i = 1; i < statsData.length; i++) {
       const row = statsData[i];
       const rowNameWithUid = row[14]; // N 欄：姓名+UID（例如：李昶昕u_0vy3a2e3）
-      
+
       // 檢查是否符合該員工（比對姓名+UID）
       const targetNameWithUid = name + uid;
       if (rowNameWithUid === targetNameWithUid) {
@@ -2258,13 +2261,13 @@ function handleGetMonthlyStats(data) {
         const totalHours = row[15];   // P 欄：總工時(H)
         const lateCount = row[16];    // Q 欄：遲到次數
         const earlyCount = row[17];   // R 欄：早退次數
-        
+
         // 格式化月份（如果是 Date 物件）
         let monthStr = month;
         if (month instanceof Date) {
           monthStr = Utilities.formatDate(month, "GMT+8", "yyyy-MM");
         }
-        
+
         return {
           success: true,
           stats: {
@@ -2276,19 +2279,24 @@ function handleGetMonthlyStats(data) {
         };
       }
     }
-    
+
     // 找不到該員工的統計資料
+    const currentDate = new Date();
+    if (monthOffset === -1) {
+      currentDate.setMonth(currentDate.getMonth() - 1);
+    }
+
     return {
       success: true,
       stats: {
-        month: new Date().toISOString().slice(0, 7), // 當月 yyyy-MM
+        month: currentDate.toISOString().slice(0, 7), // yyyy-MM
         totalHours: 0,
         lateCount: 0,
         earlyCount: 0
       },
       message: "尚無統計資料"
     };
-    
+
   } catch (e) {
     return { success: false, message: "取得統計失敗：" + e.toString() };
   }

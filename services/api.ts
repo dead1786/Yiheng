@@ -68,8 +68,8 @@ export const api = {
   approveRequest: (data: { requestId: string, type: 'makeup' | 'leave', approveAction: 'approve' | 'reject', supervisorName: string, approveReason: string, adjustedTime?: string }) => 
     post("approveRequest", data),
   
-  getMonthlyStats: (uid: string, name: string) => 
-    post("getMonthlyStats", { uid, name }),
+  getMonthlyStats: (uid: string, name: string, monthOffset?: number) =>
+    post("getMonthlyStats", { uid, name, monthOffset }),
   // 管理員取得所有員工清單
   adminGetAllStaff: () => 
     post("adminGetAllStaff"),

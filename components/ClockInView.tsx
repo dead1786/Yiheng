@@ -130,6 +130,7 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [monthlyStats, setMonthlyStats] = useState<any>(null);
   const [loadingStats, setLoadingStats] = useState(false);
+  const [statsTab, setStatsTab] = useState<'current' | 'last'>('current');
 
 
   const exitIntentRef = useRef(false);
@@ -428,10 +429,16 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
 // === 取得統計資料 ===
   const handleOpenStats = async () => {
     setShowStatsModal(true);
+    setStatsTab('current');
+    fetchStats('current');
+  };
+
+  const fetchStats = async (tab: 'current' | 'last') => {
     setLoadingStats(true);
-    
+
     try {
-      const res = await api.getMonthlyStats(user.uid || '', user.name);
+      const monthOffset = tab === 'last' ? -1 : 0;
+      const res = await api.getMonthlyStats(user.uid || '', user.name, monthOffset);
       if (res.success) {
         setMonthlyStats(res.stats);
       } else {
@@ -1033,70 +1040,88 @@ export const ClockInView = ({ user, onLogout, onAlert, onConfirm, onEnterAdmin }
       {/* === 統計 Modal === */}
       {showStatsModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in" onClick={() => setShowStatsModal(false)}>
-          <div className="bg-white rounded-[2rem] w-full max-w-sm shadow-2xl p-6" onClick={e => e.stopPropagation()}>
-            <div className="text-center mb-6">
+          <div className="bg-white rounded-[2rem] w-full max-w-sm shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="text-center p-6 pb-3">
               <div className="bg-[#0bc6a8]/10 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 text-[#0bc6a8]">
                 <BarChart3 size={28} />
               </div>
-              <h3 className="font-black text-xl text-slate-800">當月統計</h3>
+              <h3 className="font-black text-xl text-slate-800">打卡統計</h3>
               <p className="text-xs text-slate-500 mt-1">{user.name} 的出勤統計</p>
             </div>
 
-            {loadingStats ? (
-              <div className="flex flex-col items-center justify-center py-8">
-                <Loader2 className="animate-spin text-[#0bc6a8] mb-2" size={32} />
-                <p className="text-sm text-slate-500">載入中...</p>
-              </div>
-            ) : monthlyStats ? (
-              <div className="space-y-4">
-                {/* 統計月份 */}
-                <div className="bg-slate-50 rounded-xl p-4">
-                  <div className="text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">統計月份</div>
-                  <div className="text-2xl font-black text-slate-800">{monthlyStats.month}</div>
+            {/* 月份切換標籤 */}
+            <div className="flex p-3 gap-2 bg-white">
+              <button
+                onClick={() => { setStatsTab('current'); fetchStats('current'); }}
+                className={`flex-1 py-2 rounded-xl text-sm font-bold transition ${statsTab === 'current' ? 'bg-[#0bc6a8] text-white shadow-md' : 'bg-slate-100 text-slate-500'}`}
+              >
+                本月
+              </button>
+              <button
+                onClick={() => { setStatsTab('last'); fetchStats('last'); }}
+                className={`flex-1 py-2 rounded-xl text-sm font-bold transition ${statsTab === 'last' ? 'bg-[#0bc6a8] text-white shadow-md' : 'bg-slate-100 text-slate-500'}`}
+              >
+                上月
+              </button>
+            </div>
+
+            <div className="p-6 pt-3">
+              {loadingStats ? (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <Loader2 className="animate-spin text-[#0bc6a8] mb-2" size={32} />
+                  <p className="text-sm text-slate-500">載入中...</p>
                 </div>
-
-                {/* 統計數據 */}
-                <div className="space-y-3">
-                  {/* 總工時 */}
-                  <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">總工時</div>
-                      <div className="text-sm text-slate-400 mt-0.5">本月累計</div>
-                    </div>
-                    <div className="text-3xl font-black text-[#0bc6a8]">{monthlyStats.totalHours}<span className="text-base text-slate-400 ml-1">H</span></div>
+              ) : monthlyStats ? (
+                <div className="space-y-4">
+                  {/* 統計月份 */}
+                  <div className="bg-slate-50 rounded-xl p-4">
+                    <div className="text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">統計月份</div>
+                    <div className="text-2xl font-black text-slate-800">{monthlyStats.month}</div>
                   </div>
 
-                  {/* 遲到次數 */}
-                  <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">遲到次數</div>
-                      <div className="text-sm text-slate-400 mt-0.5">本月累計</div>
+                  {/* 統計數據 */}
+                  <div className="space-y-3">
+                    {/* 總工時 */}
+                    <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">總工時</div>
+                        <div className="text-sm text-slate-400 mt-0.5">{statsTab === 'current' ? '本月累計' : '上月累計'}</div>
+                      </div>
+                      <div className="text-3xl font-black text-[#0bc6a8]">{monthlyStats.totalHours}<span className="text-base text-slate-400 ml-1">H</span></div>
                     </div>
-                    <div className="text-3xl font-black text-[#ff9f28]">{monthlyStats.lateCount}<span className="text-base text-slate-400 ml-1">次</span></div>
-                  </div>
 
-                  {/* 早退次數 */}
-                  <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">早退次數</div>
-                      <div className="text-sm text-slate-400 mt-0.5">本月累計</div>
+                    {/* 遲到次數 */}
+                    <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">遲到次數</div>
+                        <div className="text-sm text-slate-400 mt-0.5">{statsTab === 'current' ? '本月累計' : '上月累計'}</div>
+                      </div>
+                      <div className="text-3xl font-black text-[#ff9f28]">{monthlyStats.lateCount}<span className="text-base text-slate-400 ml-1">次</span></div>
                     </div>
-                    <div className="text-3xl font-black text-red-500">{monthlyStats.earlyCount}<span className="text-base text-slate-400 ml-1">次</span></div>
+
+                    {/* 早退次數 */}
+                    <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">早退次數</div>
+                        <div className="text-sm text-slate-400 mt-0.5">{statsTab === 'current' ? '本月累計' : '上月累計'}</div>
+                      </div>
+                      <div className="text-3xl font-black text-red-500">{monthlyStats.earlyCount}<span className="text-base text-slate-400 ml-1">次</span></div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className="text-center py-8 text-slate-500">
-                <p className="text-sm">無統計資料</p>
-              </div>
-            )}
+              ) : (
+                <div className="text-center py-8 text-slate-500">
+                  <p className="text-sm">無統計資料</p>
+                </div>
+              )}
 
-            <button 
-              onClick={() => setShowStatsModal(false)}
-              className="w-full mt-6 py-3 bg-[#0bc6a8] text-white rounded-xl font-bold hover:bg-[#09b095] shadow-lg shadow-teal-200 transition-all"
-            >
-              關閉
-            </button>
+              <button
+                onClick={() => setShowStatsModal(false)}
+                className="w-full mt-6 py-3 bg-[#0bc6a8] text-white rounded-xl font-bold hover:bg-[#09b095] shadow-lg shadow-teal-200 transition-all"
+              >
+                關閉
+              </button>
+            </div>
           </div>
         </div>
       )}
